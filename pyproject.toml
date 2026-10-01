@@ -32,6 +32,9 @@ packages = ["src/droptimus"]
 testpaths = ["tests"]
 addopts = "-q"
 filterwarnings = ["ignore::DeprecationWarning"]
+markers = [
+    "slow: end-to-end tests that train a tiny agent",
+]
 
 [tool.coverage.run]
 source = ["src/droptimus"]

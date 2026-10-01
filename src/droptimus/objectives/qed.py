@@ -6,6 +6,7 @@ of 0.948 for this objective.
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Mapping
 
 from rdkit.Chem import QED
@@ -15,8 +16,9 @@ from droptimus.objectives.base import Objective
 from droptimus.objectives.registry import register_objective
 
 
+@lru_cache(maxsize=200_000)
 def qed_score(smiles: str) -> float:
-    """Return RDKit's QED for ``smiles``."""
+    """Return RDKit's QED for ``smiles``. Memoized: a pure function of SMILES."""
     return float(QED.qed(parse_smiles(smiles)))
 
 
