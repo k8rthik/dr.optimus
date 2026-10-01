@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# uv
+uv.lock
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Project artifacts (never commit: large, regenerable)
+runs/
+checkpoints/
+data/
+*.pt
+*.ckpt
+*.csv.gz
+!tests/fixtures/**
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
