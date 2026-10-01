@@ -72,9 +72,11 @@ class EnvConfig:
     #: valid-action set, which trades fidelity for wall-clock time.
     max_actions: int | None = None
     discount: float = 0.9
-    #: ``terminal`` gives reward only at the end of the episode (as in the
-    #: paper); ``dense`` gives the per-step change in objective value.
-    reward_mode: Literal["terminal", "dense"] = "terminal"
+    #: ``terminal`` pays the objective once, at the end of the episode.
+    #: ``dense`` pays the per-step change in objective value.
+    #: ``paper`` reproduces the reference implementation: every step pays
+    #: ``objective * discount ** steps_remaining``.
+    reward_mode: Literal["terminal", "dense", "paper"] = "terminal"
 
 
 @dataclass(frozen=True, slots=True)
