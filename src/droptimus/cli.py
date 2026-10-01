@@ -181,7 +181,14 @@ def _add_run_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--discount", type=float, default=0.9)
     parser.add_argument(
-        "--reward-mode", choices=("terminal", "dense"), default="terminal"
+        "--reward-mode",
+        choices=("terminal", "dense", "paper"),
+        default="terminal",
+        help=(
+            "terminal: objective paid once at the horizon; dense: per-step "
+            "objective delta; paper: objective * discount^(steps left) every "
+            "step, as in the reference implementation"
+        ),
     )
     parser.add_argument(
         "--max-actions",

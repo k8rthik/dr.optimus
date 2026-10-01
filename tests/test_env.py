@@ -152,6 +152,32 @@ class TestRewards:
         after = env.objective(result.state.smiles)
         assert result.reward == pytest.approx(after - before)
 
+    def test_paper_mode_discounts_by_remaining_steps(self) -> None:
+        """The reference implementation pays objective * gamma^(steps left)."""
+        config = EnvConfig(
+            atom_types=("C", "N", "O"), max_steps=3, reward_mode="paper", discount=0.9
+        )
+        env = make_env(config=config)
+        env.reset()
+        result = env.step(canonical_smiles("CC"))
+        expected = env.objective("CC") * 0.9 ** result.state.steps_remaining
+        assert result.reward == pytest.approx(expected)
+
+    def test_paper_mode_pays_every_step(self) -> None:
+        config = EnvConfig(atom_types=("C", "N", "O"), max_steps=3, reward_mode="paper")
+        env = make_env(config=config)
+        env.reset()
+        rewards = [env.step(sorted(env.valid_actions())[0]).reward for _ in range(3)]
+        assert all(reward > 0.0 for reward in rewards)
+
+    def test_paper_mode_final_step_is_undiscounted(self) -> None:
+        config = EnvConfig(atom_types=("C", "N", "O"), max_steps=2, reward_mode="paper")
+        env = make_env(config=config)
+        env.reset()
+        env.step(sorted(env.valid_actions())[0])
+        last = env.step(sorted(env.valid_actions())[0])
+        assert last.reward == pytest.approx(env.objective(last.state.smiles))
+
     def test_info_reports_the_objective_value(self) -> None:
         env = make_env()
         env.reset()

@@ -38,7 +38,4 @@ markers = [
 
 [tool.coverage.run]
 source = ["src/droptimus"]
-omit = [
-    "src/droptimus/train.py",
-    "src/droptimus/cli.py",
-]
+# Nothing is omitted: the training loop and the CLI are covered too.

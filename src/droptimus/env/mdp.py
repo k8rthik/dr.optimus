@@ -16,10 +16,15 @@ Two reward shapes are supported:
     Reward is the change in objective value caused by the edit. The episode
     return then telescopes to (final - initial) objective.
 
-The reference implementation instead pays ``objective * gamma^(steps
-remaining)`` on *every* step, which sums the same quantity many times per
-episode. We use the two formulations above because they are unambiguous;
-``terminal`` is the default.
+``paper``
+    What the reference implementation actually does: every step pays
+    ``objective(current) * gamma^(steps remaining)``. This sums a scaled copy of
+    the objective once per step rather than once per episode, so returns are not
+    comparable with the other two modes, but it gives the agent a reward signal
+    at every step instead of only at the horizon.
+
+``terminal`` is the default because it is the unambiguous episodic formulation;
+``paper`` exists so the reproduction can be run exactly as published.
 """
 
 from __future__ import annotations
@@ -155,7 +160,9 @@ class MoleculeEnv:
         next_state = MoleculeState(
             smiles=chosen, step=state.step + 1, max_steps=state.max_steps
         )
-        reward = self._reward(state.smiles, chosen, next_state.done)
+        reward = self._reward(
+            state.smiles, chosen, next_state.done, next_state.steps_remaining
+        )
         info = dict(self.objective.components(chosen))
         info["objective"] = self.objective.score(chosen)
         self._state = next_state
@@ -165,7 +172,14 @@ class MoleculeEnv:
 
     # --- rewards -----------------------------------------------------------
 
-    def _reward(self, previous: str, current: str, done: bool) -> float:
-        if self.config.reward_mode == "dense":
+    def _reward(
+        self, previous: str, current: str, done: bool, steps_remaining: int
+    ) -> float:
+        mode = self.config.reward_mode
+        if mode == "dense":
             return self.objective.score(current) - self.objective.score(previous)
+        if mode == "paper":
+            return self.objective.score(current) * (
+                self.config.discount**steps_remaining
+            )
         return self.objective.score(current) if done else 0.0
