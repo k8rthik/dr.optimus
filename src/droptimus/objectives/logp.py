@@ -12,6 +12,7 @@ and is the one Zhou et al. (2019) report MolDQN results against (best value
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Mapping
 
 from rdkit.Chem import Crippen
@@ -40,6 +41,7 @@ def largest_ring_excess(mol: object) -> int:
     return max(largest - MAX_UNPENALIZED_RING_SIZE, 0)
 
 
+@lru_cache(maxsize=200_000)
 def penalized_logp_components(smiles: str) -> Mapping[str, float]:
     """Return the three normalized terms plus the raw values behind them."""
     mol = parse_smiles(smiles)
@@ -57,7 +59,7 @@ def penalized_logp_components(smiles: str) -> Mapping[str, float]:
 
 
 def penalized_logp(smiles: str) -> float:
-    """Return the penalized logP of ``smiles``."""
+    """Return the penalized logP of ``smiles``. Memoized via its components."""
     parts = penalized_logp_components(smiles)
     return (
         parts["normalized_logp"] + parts["normalized_sa"] + parts["normalized_cycle"]
