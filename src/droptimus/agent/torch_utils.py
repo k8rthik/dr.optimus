@@ -15,7 +15,13 @@ VALID_DEVICES = ("auto", "cpu", "mps", "cuda")
 def resolve_device(requested: str = "auto") -> torch.device:
     """Return the torch device to use.
 
-    ``auto`` prefers Apple MPS, then CUDA, then CPU.
+    ``auto`` prefers CUDA, then CPU. It deliberately does *not* pick Apple MPS:
+    this workload is many small forward passes (a few thousand rows through a
+    4-layer MLP, dozens of times per episode), where kernel-launch overhead
+    dominates. Measured on an M3 Pro, MPS ran 1.51 s/episode against 1.20 s/episode
+    on CPU for the default QED configuration, so CPU is the better automatic
+    choice. ``--device mps`` is still available and is the right choice if the
+    batch or network is scaled up.
 
     Raises:
         ConfigError: if an unknown device is named, or a named accelerator is
@@ -27,8 +33,6 @@ def resolve_device(requested: str = "auto") -> torch.device:
             f"Unknown device {requested!r}; choose one of {', '.join(VALID_DEVICES)}."
         )
     if name == "auto":
-        if torch.backends.mps.is_available():
-            return torch.device("mps")
         if torch.cuda.is_available():
             return torch.device("cuda")
         return torch.device("cpu")

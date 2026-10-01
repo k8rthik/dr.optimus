@@ -352,3 +352,17 @@ class TestCheckpoints:
         torch.save(payload, path)
         with pytest.raises(CheckpointError):
             DoubleDQNAgent.load(path)
+
+
+class TestAutoDeviceChoice:
+    """`auto` must not select MPS: measured slower than CPU for this workload."""
+
+    def test_auto_prefers_cpu_over_mps(self) -> None:
+        if not torch.backends.mps.is_available():
+            pytest.skip("no MPS on this machine")
+        assert resolve_device("auto").type == "cpu"
+
+    def test_mps_can_still_be_requested(self) -> None:
+        if not torch.backends.mps.is_available():
+            pytest.skip("no MPS on this machine")
+        assert resolve_device("mps").type == "mps"
