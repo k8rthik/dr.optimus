@@ -87,8 +87,13 @@ class AgentConfig:
     gnn_layers: int = 3
     learning_rate: float = 1e-4
     grad_clip: float = 10.0
-    batch_size: int = 64
-    replay_capacity: int = 50_000
+    batch_size: int = 32
+    replay_capacity: int = 20_000
+    #: Cap on how many successor candidates the bootstrap target maxes over.
+    #: The full set can run to several hundred molecules; scoring all of them
+    #: for every transition in a batch dominates wall-clock time. Subsampling
+    #: makes the target a max over a subset, which biases it slightly low.
+    bootstrap_actions: int = 48
     #: Gradient updates per environment step.
     updates_per_step: int = 1
     #: Environment steps between hard target-network syncs.
