@@ -209,20 +209,18 @@ horizon. The reference implementation pays `objective * discount^(steps left)` a
 *every* step, which is available as `--reward-mode paper`. Returns are not
 comparable between modes; the measured comparison is in the table above.
 
-**An agent trained from one start molecule transfers poorly.** The
+**An agent trained from one start molecule barely transfers.** The
 single-objective runs start every episode from a single carbon atom, so they
-learn to *build* a good molecule from nothing and have never seen a drug-sized
-input. Pointed at one, they tend to sit still:
+learn to *build* a molecule from nothing and never see a drug-sized input.
+Pointed at 40 ZINC molecules instead (`--start-set fixture`, 600-episode QED
+checkpoint), the agent reached mean QED 0.752 against a start mean of 0.703 and
+improved 57% of them --- but the random-edit baseline on the same 40 molecules
+reached 0.746 and improved 48%. The transfer is real and it is almost entirely
+what random editing would have given you. Individual cases vary a lot: aspirin
+(`CCOc1ccccc1C(=O)O`, QED 0.744) comes back unchanged, while
+`CN(Cc1ccc(OC(F)(F)F)cc1)C(=O)c1csc(-c2cccs2)n1` goes from 0.605 to 0.771.
 
-```
-$ droptimus optimize "CCOc1ccccc1C(=O)O" --checkpoint runs/qed-fp-2000/checkpoint.pt
-start      CCOc1ccccc1C(=O)O
-objective  qed = +0.7440
-best       CCOc1ccccc1C(=O)O
-objective  qed = +0.7440 (+0.0000)
-```
-
-For editing arbitrary molecules, use a checkpoint trained over a start *set*
+For editing arbitrary molecules, train over a start *set*
 (`--start-set zinc800-logp` or `--start-set zinc-sample`), which is what the
 constrained run does.
 

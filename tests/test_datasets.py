@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from droptimus.datasets import (
@@ -173,3 +175,19 @@ class TestZinc800Cache:
         assert max(penalized_logp(m) for m in selected) <= min(
             penalized_logp(m) for m in rest
         )
+
+
+class TestSamplePathIsInsideThePackage:
+    """--start-set fixture must work from an installed wheel, not just a checkout."""
+
+    def test_sample_lives_under_the_package(self) -> None:
+        import droptimus
+        from droptimus.datasets import SAMPLE_PATH
+
+        package_root = Path(droptimus.__file__).resolve().parent
+        assert SAMPLE_PATH.is_relative_to(package_root)
+
+    def test_sample_file_exists(self) -> None:
+        from droptimus.datasets import SAMPLE_PATH
+
+        assert SAMPLE_PATH.exists()

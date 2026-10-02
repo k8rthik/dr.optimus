@@ -33,7 +33,11 @@ ZINC_FILENAME = "zinc250k.csv"
 #: Size of the constrained-optimization start set, following the literature.
 ZINC800_SIZE = 800
 
-FIXTURE_PATH = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "zinc_sample.smi"
+#: A 200-molecule ZINC250k sample, shipped inside the package so that
+#: `--start-set fixture` and the offline tests work from an installed wheel and
+#: not only from a source checkout.
+SAMPLE_FILENAME = "zinc_sample.smi"
+SAMPLE_PATH = Path(__file__).resolve().parent / "data" / SAMPLE_FILENAME
 
 
 class DatasetError(DrOptimusError):
@@ -183,5 +187,9 @@ def read_smiles(path: Path | str) -> tuple[str, ...]:
 
 
 def load_fixture() -> tuple[str, ...]:
-    """Load the committed 200-molecule ZINC sample used by the tests."""
-    return read_smiles(FIXTURE_PATH)
+    """Load the 200-molecule ZINC sample shipped with the package.
+
+    Used as an offline start set and as the novelty reference when ZINC250k has
+    not been downloaded.
+    """
+    return read_smiles(SAMPLE_PATH)
