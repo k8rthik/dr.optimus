@@ -45,8 +45,9 @@ from droptimus.evaluate import (
     format_metrics,
     generated_from_episodes,
     published_random_walk,
+    rescore,
 )
-from droptimus.objectives import available_objectives
+from droptimus.objectives import available_objectives, make_objective
 from droptimus.start_sets import (
     START_SET_CHOICES,
     novelty_reference,
@@ -471,9 +472,25 @@ def command_evaluate(args: argparse.Namespace) -> int:
 
     print()
     print(_published_comparison(config.objective, agent_final))
+
     if delta is not None:
+        # Zhou et al. Table 2 reports improvement in the *base* objective with
+        # the constraint success rate alongside it, so the penalty is taken back
+        # out before the improvement is reported.
+        base_name = str(dict(config.objective_kwargs).get("base", "penalized_logp"))
+        base_records = rescore(
+            generated_from_episodes(agent_episodes, use_best=False),
+            make_objective(base_name),
+        )
+        base_metrics = compute_metrics(
+            base_records, reference=reference, similarity_delta=delta
+        )
         print()
-        print(constrained_comparison(float(delta), agent_final))
+        print(format_metrics(base_metrics, f"same molecules scored by {base_name}"))
+        print()
+        print(constrained_comparison(float(delta), base_metrics))
+        payload["agent_base_objective"] = base_metrics.as_dict()
+        payload["base_objective"] = base_name
 
     if args.out:
         destination = Path(args.out)

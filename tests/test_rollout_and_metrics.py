@@ -333,3 +333,54 @@ class TestCollectEpisodes:
         first = collect_episodes(small_run(), ["CCO"], agent)
         second = collect_episodes(small_run(), ["CCO"], agent)
         assert first[0].trajectory == second[0].trajectory
+
+
+class TestRescore:
+    """The constrained task reports improvement in the base objective.
+
+    The agent optimizes base-minus-penalty, but Zhou et al. Table 2 reports the
+    penalized-logP improvement with the constraint success rate separately, so
+    the penalty has to come back out before improvement is reported.
+    """
+
+    def test_scores_are_replaced(self) -> None:
+        from droptimus.evaluate import rescore
+        from droptimus.objectives.logp import penalized_logp
+
+        records = (Generated("CCO", "CCCCO", 99.0, -99.0, 0.5),)
+        rescored = rescore(records, make_objective("penalized_logp"))
+        assert rescored[0].objective == pytest.approx(penalized_logp("CCCCO"))
+        assert rescored[0].start_objective == pytest.approx(penalized_logp("CCO"))
+
+    def test_molecules_and_similarity_are_preserved(self) -> None:
+        from droptimus.evaluate import rescore
+
+        records = (Generated("CCO", "CCCCO", 1.0, 0.0, 0.42),)
+        rescored = rescore(records, make_objective("qed"))
+        assert rescored[0].smiles == "CCCCO"
+        assert rescored[0].start_smiles == "CCO"
+        assert rescored[0].similarity == pytest.approx(0.42)
+
+    def test_the_penalty_is_removed(self) -> None:
+        from droptimus.evaluate import rescore
+        from droptimus.objectives.logp import penalized_logp
+
+        constrained = make_objective(
+            "constrained", reference="CCO", base="penalized_logp", delta=0.9
+        )
+        # A dissimilar molecule: the constrained score carries a large penalty.
+        penalized = constrained("CCCCCCCCCCCC")
+        assert penalized < penalized_logp("CCCCCCCCCCCC")
+
+        records = (
+            Generated("CCO", "CCCCCCCCCCCC", penalized, constrained("CCO"), 0.1),
+        )
+        rescored = rescore(records, make_objective("penalized_logp"))
+        assert rescored[0].objective == pytest.approx(penalized_logp("CCCCCCCCCCCC"))
+
+    def test_rescoring_is_immutable(self) -> None:
+        from droptimus.evaluate import rescore
+
+        records = (Generated("CCO", "CCCCO", 1.0, 0.0, 0.42),)
+        rescore(records, make_objective("qed"))
+        assert records[0].objective == pytest.approx(1.0)
