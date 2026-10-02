@@ -120,7 +120,7 @@ was **not** reproduced by this code. Regenerate everything with
 
 ### The short version
 
-Three results matter, and one of them is a failure.
+Four results matter, and two of them are failures.
 
 **1. QED: the agent works, the graph encoder works better, and neither reaches
 the published number.** The best QED result here is the *GNN* encoder at 500
@@ -139,7 +139,7 @@ fingerprint MLP is what the paper used.
 
 **3. Penalized logP failed, and failed in an informative way.** On the
 best-molecule-visited protocol the trained agent is *worse than its own random
-baseline*: agent best 0.430 against the random walk's +1.719 over the same 100
+baseline*: agent best -0.430 against the random walk's +1.719 over the same 100
 episodes from the same start molecule. The agent only wins on the terminal-state
 protocol (mean -4.71 against -6.86), i.e. it ends on less-bad molecules than a
 random walk does while never finding better ones. Published MolDQN-naive gets
