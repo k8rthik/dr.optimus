@@ -13,6 +13,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 
 from droptimus.chem.molecule import canonical_smiles, is_valid_smiles, tanimoto_similarity
+from droptimus.objectives.base import Objective
 from droptimus.rollout import Episode
 
 
@@ -81,6 +82,31 @@ def generated_from_episodes(
             )
         )
     return tuple(records)
+
+
+def rescore(
+    generated: Sequence[Generated], objective: Objective
+) -> tuple[Generated, ...]:
+    """Return copies of ``generated`` scored under a different objective.
+
+    Needed for the constrained task. The agent optimizes a penalty-adjusted
+    score, but Zhou et al. Table 2 reports the improvement in the *base*
+    objective (penalized logP) with the constraint success rate given
+    separately. Mixing the penalty into the reported improvement would make a
+    constraint violation look like a worse molecule.
+
+    Molecule selection and similarity are untouched; only the scores change.
+    """
+    return tuple(
+        Generated(
+            start_smiles=record.start_smiles,
+            smiles=record.smiles,
+            objective=float(objective.score(record.smiles)),
+            start_objective=float(objective.score(record.start_smiles)),
+            similarity=record.similarity,
+        )
+        for record in generated
+    )
 
 
 def _std(values: Sequence[float]) -> float:
