@@ -8,8 +8,9 @@ random-edit baseline.
 from __future__ import annotations
 
 import random
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Callable, Protocol, Sequence
+from typing import Protocol
 
 from droptimus.agent.replay import Transition
 from droptimus.env.mdp import MoleculeEnv

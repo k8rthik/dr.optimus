@@ -59,7 +59,7 @@ def download_zinc250k(
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = destination.with_suffix(".partial")
     try:
-        urllib.request.urlretrieve(ZINC_URL, temporary)  # noqa: S310 - fixed https URL
+        urllib.request.urlretrieve(ZINC_URL, temporary)
     except (urllib.error.URLError, OSError) as exc:
         temporary.unlink(missing_ok=True)
         raise DatasetError(

@@ -12,8 +12,8 @@ and is the one Zhou et al. (2019) report MolDQN results against (best value
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from functools import lru_cache
-from typing import Mapping
 
 from rdkit.Chem import Crippen
 

@@ -39,3 +39,20 @@ markers = [
 [tool.coverage.run]
 source = ["src/droptimus"]
 # Nothing is omitted: the training loop and the CLI are covered too.
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+    "E501",    # long lines are caught by the formatter, not the linter
+    "B008",    # argparse/dataclass defaults are evaluated once on purpose
+    "RUF012",  # ClassVar annotations are noise on simple config classes
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Objective modules are imported for their registration side effects.
+"src/droptimus/objectives/__init__.py" = ["F401"]

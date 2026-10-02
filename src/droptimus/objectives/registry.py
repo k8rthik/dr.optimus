@@ -8,14 +8,14 @@ populate the registry.
 
 from __future__ import annotations
 
-from typing import Callable, Dict
+from collections.abc import Callable
 
 from droptimus.errors import UnknownObjectiveError
 from droptimus.objectives.base import Objective
 
 ObjectiveFactory = Callable[..., Objective]
 
-_REGISTRY: Dict[str, ObjectiveFactory] = {}
+_REGISTRY: dict[str, ObjectiveFactory] = {}
 
 
 def register_objective(name: str) -> Callable[[ObjectiveFactory], ObjectiveFactory]:

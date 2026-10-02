@@ -12,8 +12,9 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 #: Published MolDQN values, for the comparison column only.
 PUBLISHED = {

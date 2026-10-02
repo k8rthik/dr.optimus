@@ -128,7 +128,7 @@ class TestStartSets:
 
 class TestInvalidInputHandling:
     def test_bad_smiles_in_train_exits_with_code_two(self, capsys) -> None:
-        code = main(TINY_TRAIN + ["--start", "C(((("])
+        code = main([*TINY_TRAIN, "--start", "C(((("])
         captured = capsys.readouterr()
         assert code == 2
         assert "error:" in captured.err
@@ -145,12 +145,12 @@ class TestInvalidInputHandling:
         assert "error:" in capsys.readouterr().err
 
     def test_unknown_objective_exits_with_code_two(self, capsys) -> None:
-        code = main(TINY_TRAIN + ["--objective", "nope"])
+        code = main([*TINY_TRAIN, "--objective", "nope"])
         assert code == 2
         assert "error:" in capsys.readouterr().err
 
     def test_bad_atom_types_exit_with_code_two(self, capsys) -> None:
-        code = main(TINY_TRAIN + ["--atom-types", "C,Zz"])
+        code = main([*TINY_TRAIN, "--atom-types", "C,Zz"])
         assert code == 2
         assert "error:" in capsys.readouterr().err
 
@@ -159,7 +159,7 @@ class TestInvalidInputHandling:
 class TestEndToEnd:
     def test_train_then_optimize_then_evaluate(self, tmp_path, capsys) -> None:
         out = tmp_path / "run"
-        assert main(TINY_TRAIN + ["--out", str(out), "--start", "C"]) == 0
+        assert main([*TINY_TRAIN, "--out", str(out), "--start", "C"]) == 0
         assert (out / "checkpoint.pt").exists()
         capsys.readouterr()
 
@@ -201,7 +201,7 @@ class TestEndToEnd:
 
     def test_evaluate_can_skip_the_baseline(self, tmp_path, capsys) -> None:
         out = tmp_path / "run"
-        main(TINY_TRAIN + ["--out", str(out)])
+        main([*TINY_TRAIN, "--out", str(out)])
         capsys.readouterr()
         assert (
             main(

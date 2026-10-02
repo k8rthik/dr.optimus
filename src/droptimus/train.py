@@ -12,9 +12,9 @@ import json
 import logging
 import random
 import time
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Sequence
 
 from droptimus.agent.dqn import DoubleDQNAgent
 from droptimus.config import RunConfig

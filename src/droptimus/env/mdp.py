@@ -30,8 +30,8 @@ Two reward shapes are supported:
 from __future__ import annotations
 
 import random
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Mapping
 
 from droptimus.chem.molecule import canonical_smiles
 from droptimus.config import EnvConfig

@@ -13,9 +13,9 @@ for the vanilla max-over-target-network variant.
 from __future__ import annotations
 
 import random
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict
 from pathlib import Path
-from typing import Mapping, Sequence
 
 import numpy as np
 import torch
@@ -272,7 +272,7 @@ class DoubleDQNAgent:
     @classmethod
     def load(
         cls, path: str | Path, device: str = "auto"
-    ) -> tuple["DoubleDQNAgent", Mapping[str, object]]:
+    ) -> tuple[DoubleDQNAgent, Mapping[str, object]]:
         """Load a checkpoint, returning the agent and its metadata.
 
         Raises:

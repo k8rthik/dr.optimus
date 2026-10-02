@@ -94,39 +94,83 @@ def atom_additions(mol: Chem.Mol, config: EnvConfig) -> frozenset[str]:
     return frozenset(results)
 
 
-def _ring_size_allowed(mol: Chem.Mol, first: int, second: int, config: EnvConfig) -> bool:
-    """Return whether bonding ``first`` to ``second`` closes an allowed ring."""
+#: RDKit's distance matrix uses this sentinel for atoms in different fragments.
+_DISCONNECTED_DISTANCE = 1e7
+
+
+def _kekulized_template(mol: Chem.Mol) -> Chem.Mol | None:
+    """Return a kekulized copy of ``mol``, or None if it cannot be kekulized.
+
+    Built once per enumeration and copied per candidate. Copying an existing
+    kekulized molecule is far cheaper than re-kekulizing for every candidate,
+    and bond-order edits are undefined on aromatic bonds.
+    """
+    editable = Chem.RWMol(mol)
+    try:
+        Chem.Kekulize(editable, clearAromaticFlags=True)
+    except Chem.KekulizeException:
+        return None
+    return editable.GetMol()
+
+
+def _ring_size_allowed(
+    distances: object, first: int, second: int, config: EnvConfig
+) -> bool:
+    """Return whether bonding ``first`` to ``second`` closes an allowed ring.
+
+    ``distances`` is the molecule's topological distance matrix. A new bond
+    closes a ring whose size is the topological distance plus one; atoms in
+    different fragments close no ring at all.
+    """
     if not config.allowed_ring_sizes:
         return True
-    path = Chem.rdmolops.GetShortestPath(mol, first, second)
-    if not path:
-        # Disconnected atoms: bonding them creates no ring at all.
+    distance = distances[first][second]  # type: ignore[index]
+    if distance >= _DISCONNECTED_DISTANCE:
         return True
-    return len(path) in config.allowed_ring_sizes
+    return int(distance) + 1 in config.allowed_ring_sizes
 
 
 def bond_additions(mol: Chem.Mol, config: EnvConfig) -> frozenset[str]:
-    """Enumerate molecules reachable by adding a bond or raising a bond order."""
+    """Enumerate molecules reachable by adding a bond or raising a bond order.
+
+    The candidate loop is quadratic in atom count, so every cheap rejection is
+    made *before* the molecule is copied: pairs are screened against the
+    precomputed distance matrix and the existing bond's order, and only
+    survivors are materialized and sanitized.
+    """
+    template = _kekulized_template(mol)
+    if template is None:
+        return frozenset()
     free_valences = free_valence_map(mol)
+    distances = Chem.rdmolops.GetDistanceMatrix(mol)
+    # Existing bond orders, read once from the kekulized template.
+    existing_order: dict[tuple[int, int], int | None] = {}
+    for bond in template.GetBonds():
+        key = (bond.GetBeginAtomIdx(), bond.GetEndAtomIdx())
+        bond_type = bond.GetBondType()
+        existing_order[key] = (
+            _BOND_TYPES.index(bond_type) if bond_type in _BOND_TYPES else None
+        )
+        existing_order[key[::-1]] = existing_order[key]
+
     results: set[str] = set()
     for order in BOND_ORDERS:
         for first, second in itertools.combinations(free_valences[order], 2):
-            editable = Chem.RWMol(mol)
-            try:
-                Chem.Kekulize(editable, clearAromaticFlags=True)
-            except Chem.KekulizeException:
-                continue
-            existing = editable.GetBondBetweenAtoms(first, second)
-            if existing is not None:
-                if existing.GetBondType() not in _BOND_TYPES:
-                    continue  # aromatic bonds are never edited directly
-                new_order = _BOND_TYPES.index(existing.GetBondType()) + order
+            current = existing_order.get((first, second), 0)
+            if current is None:
+                continue  # aromatic bonds are never edited directly
+            if current > 0:
+                new_order = current + order
                 if new_order >= len(_BOND_TYPES):
                     continue
-                existing.SetBondType(_BOND_TYPES[new_order])
+            elif not _ring_size_allowed(distances, first, second, config):
+                continue
+
+            editable = Chem.RWMol(template)
+            if current > 0:
+                bond = editable.GetBondBetweenAtoms(first, second)
+                bond.SetBondType(_BOND_TYPES[current + order])
             else:
-                if not _ring_size_allowed(mol, first, second, config):
-                    continue
                 editable.AddBond(first, second, _BOND_TYPES[order])
             smiles = _sanitized_smiles(editable)
             if smiles is not None:
@@ -155,23 +199,25 @@ def bond_removals(mol: Chem.Mol, config: EnvConfig) -> frozenset[str]:
     """Enumerate molecules reachable by lowering or deleting one bond."""
     if not config.allow_bond_removal:
         return frozenset()
+    template = _kekulized_template(mol)
+    if template is None:
+        return frozenset()
     results: set[str] = set()
-    bond_endpoints = tuple(
-        (bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()) for bond in mol.GetBonds()
+    # Endpoints and orders are read once from the kekulized template, so a
+    # molecule is copied only for candidates that survive the order check.
+    bonds = tuple(
+        (bond.GetBeginAtomIdx(), bond.GetEndAtomIdx(), bond.GetBondType())
+        for bond in template.GetBonds()
     )
     for order in BOND_ORDERS:
-        for begin, end in bond_endpoints:
-            editable = Chem.RWMol(mol)
-            try:
-                Chem.Kekulize(editable, clearAromaticFlags=True)
-            except Chem.KekulizeException:
+        for begin, end, bond_type in bonds:
+            if bond_type not in _BOND_TYPES:
                 continue
-            bond = editable.GetBondBetweenAtoms(begin, end)
-            if bond is None or bond.GetBondType() not in _BOND_TYPES:
-                continue
-            new_order = _BOND_TYPES.index(bond.GetBondType()) - order
+            new_order = _BOND_TYPES.index(bond_type) - order
             if new_order < 0:
                 continue
+            editable = Chem.RWMol(template)
+            bond = editable.GetBondBetweenAtoms(begin, end)
             if new_order == 0:
                 editable.RemoveBond(begin, end)
             else:
