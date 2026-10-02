@@ -168,3 +168,61 @@ class TestValidActions:
     def test_single_atom_start_can_still_act(self) -> None:
         actions = valid_actions("C", CONFIG)
         assert canonical_smiles("CC") in actions
+
+
+class TestActionsAreAddressable:
+    """Every offered action must canonicalize to itself.
+
+    The environment identifies an action by its canonical SMILES, so an action
+    whose SMILES reads back as a different string would be offered to the agent
+    and then rejected by step(). This crashed a 600-episode training run.
+    """
+
+    def test_regression_fused_ring_with_unstable_aromaticity(self) -> None:
+        # Built from a kekulized template, this molecule's successor
+        # 'NC12c3o[nH][nH]n1c32' sanitizes cleanly but reads back as
+        # 'NC12C3=C1N2NNO3'.
+        for action in valid_actions("NC1c2cn1[nH][nH]o2", CONFIG):
+            assert action == canonical_smiles(action), action
+
+    @pytest.mark.parametrize(
+        "smiles",
+        [
+            "NC1c2cn1[nH][nH]o2",
+            "C",
+            "CCO",
+            "c1ccccc1",
+            "c1ccc2ccccc2c1",
+            "O=c1[nH]cnc2[nH]cnc12",
+            "C1=CC2=NN=C(O2)C1",
+            "c1cnn2ccccc12",
+            "N1NOC2=C1C=C2",
+            "C1OC2NNC2N1",
+            "O=C1C=CC2=NOC2=C1",
+            "c1ccc2c(c1)oc1ccccc12",
+            "CC(=O)Oc1ccccc1C(=O)O",
+        ],
+    )
+    def test_every_action_is_a_canonicalization_fixed_point(self, smiles: str) -> None:
+        for action in valid_actions(smiles, CONFIG):
+            assert action == canonical_smiles(action), f"{smiles} -> {action}"
+
+    def test_every_action_is_accepted_by_the_environment(self) -> None:
+        """The end-to-end invariant: anything offered can be stepped."""
+        import random
+
+        from droptimus.env.mdp import MoleculeEnv
+        from droptimus.objectives import make_objective
+
+        env = MoleculeEnv(
+            objective=make_objective("qed"),
+            config=EnvConfig(atom_types=("C", "N", "O"), max_steps=12, max_atoms=14),
+            start_smiles="NC1c2cn1[nH][nH]o2",
+            rng=random.Random(0),
+        )
+        rng = random.Random(5)
+        for _ in range(25):
+            state = env.reset()
+            while not state.done:
+                offered = sorted(env.valid_actions())
+                state = env.step(rng.choice(offered)).state
