@@ -27,6 +27,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/droptimus"]
+# The 200-molecule ZINC sample ships with the package so that --start-set
+# fixture and the offline tests work from an installed wheel.
+artifacts = ["src/droptimus/data/*.smi"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
