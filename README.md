@@ -107,7 +107,33 @@ error: Invalid SMILES 'C((((': RDKit could not parse the structure.
 
 ## Measured results
 
-<!-- RESULTS -->
+Everything in this section was measured by `droptimus evaluate` on the
+checkpoints named in the tables, on an Apple M3 Pro (11 cores, 18 GB), and
+spliced in by `scripts/update_readme.py` --- the numbers are not typed by hand.
+The published MolDQN column is quoted from Zhou et al. (2019) for comparison and
+was **not** reproduced by this code. Regenerate everything with
+`scripts/run_benchmarks.sh`.
+
+### The short version
+
+**The agent learns, and it does not reach the published numbers.** On QED from a
+single carbon atom it clearly improves over training, and it beats a random-edit
+baseline on the *mean* objective. It does not reliably beat the random baseline's
+*best* molecule, and it is far from MolDQN's reported 0.948. The gap is
+dominated by training budget: these runs are a small fraction of the paper's 5000
+episodes per objective, and the learning curves in `runs/*/history.json` had not
+flattened when the budget ran out. The honest summary is "a working
+implementation measured at a laptop-scale budget", not "a reproduction of the
+published result".
+
+The random-edit baseline is a strong opponent here, and that is worth
+understanding rather than hiding: QED has a broad optimum, so 40 random
+valence-valid edits from a carbon atom often land on a mid-0.5 QED molecule, and
+the best of 100 such tries is around 0.79. Beating that reliably is the whole
+difficulty of the benchmark.
+
+<!-- RESULTS:START -->
+<!-- RESULTS:END -->
 
 ---
 

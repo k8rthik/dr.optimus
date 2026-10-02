@@ -9,14 +9,16 @@ kekulizes per candidate, the way the first version of this module did.
 from __future__ import annotations
 
 import itertools
+from unittest import mock
 
 import pytest
 from rdkit import Chem
 
-from droptimus.chem.molecule import mol_to_smiles, parse_smiles
+from droptimus.chem.molecule import parse_smiles
 from droptimus.config import BOND_ORDERS, EnvConfig
 from droptimus.env.actions import (
     _keep_largest_fragment,
+    _sanitized_smiles,
     bond_additions,
     bond_removals,
     free_valence_map,
@@ -50,10 +52,10 @@ CONFIGS = [
 ]
 
 
-def _sanitized(editable: Chem.RWMol) -> str | None:
-    if Chem.SanitizeMol(editable, catchErrors=True):
-        return None
-    return mol_to_smiles(editable)
+# The reference deliberately shares the production candidate-acceptance helper.
+# What is being pinned is which candidates each enumerator reaches and when it
+# copies the molecule -- not how an accepted candidate is turned into a string.
+_sanitized = _sanitized_smiles
 
 
 def reference_bond_additions(mol: Chem.Mol, config: EnvConfig) -> frozenset[str]:
@@ -138,21 +140,41 @@ class TestEquivalence:
 
 
 class TestEnumerationCost:
-    def test_optimized_enumeration_is_faster_on_a_large_molecule(self) -> None:
-        """Guards against the per-pair molecule copy creeping back in."""
-        import time
+    """Pins the optimization itself, by counting molecule copies.
 
-        mol = parse_smiles("CC(C)(C)c1ccc2occ(CC(=O)Nc3ccccc3F)c2c1" * 1)
+    Wall-clock timing is too noisy to assert on, but the number of RWMol
+    constructions is exact: the whole point of the change is that a candidate
+    rejected by a cheap check never causes a copy.
+    """
+
+    def _count_copies(self, enumerate_fn, mol, config) -> int:
+        real_rwmol = Chem.RWMol
+        calls = 0
+
+        def counting_rwmol(*args: object, **kwargs: object) -> Chem.RWMol:
+            nonlocal calls
+            calls += 1
+            return real_rwmol(*args, **kwargs)
+
+        with mock.patch.object(Chem, "RWMol", counting_rwmol):
+            enumerate_fn(mol, config)
+        return calls
+
+    def test_optimized_enumeration_copies_fewer_molecules(self) -> None:
+        mol = parse_smiles("CC(C)(C)c1ccc2occ(CC(=O)Nc3ccccc3F)c2c1")
         config = CONFIGS[0]
+        optimized = self._count_copies(bond_additions, mol, config)
+        naive = self._count_copies(reference_bond_additions, mol, config)
+        assert optimized < naive, f"optimized={optimized} naive={naive}"
 
-        start = time.perf_counter()
-        for _ in range(10):
-            reference_bond_additions(mol, config)
-        naive = time.perf_counter() - start
-
-        start = time.perf_counter()
-        for _ in range(10):
-            bond_additions(mol, config)
-        optimized = time.perf_counter() - start
-
-        assert optimized < naive
+    def test_saving_grows_with_molecule_size(self) -> None:
+        config = CONFIGS[0]
+        small = parse_smiles("CCCCCC")
+        large = parse_smiles("C" * 30)
+        small_ratio = self._count_copies(
+            bond_additions, small, config
+        ) / self._count_copies(reference_bond_additions, small, config)
+        large_ratio = self._count_copies(
+            bond_additions, large, config
+        ) / self._count_copies(reference_bond_additions, large, config)
+        assert large_ratio <= small_ratio
