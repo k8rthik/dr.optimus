@@ -146,37 +146,114 @@ def compute_metrics(
     )
 
 
-#: Values reported by Zhou et al. (2019), "Optimization of Molecules via Deep
-#: Reinforcement Learning", Scientific Reports 9:10752. Used only for comparison
-#: in generated reports -- never mixed into measured numbers.
-PUBLISHED_MOLDQN: Mapping[str, Mapping[str, float]] = {
-    "qed": {"top1": 0.948, "top2": 0.944, "top3": 0.941},
-    "penalized_logp": {"top1": 11.84, "top2": 11.84, "top3": 11.82},
+#: Values transcribed from Zhou et al. (2019), "Optimization of Molecules via
+#: Deep Reinforcement Learning", Scientific Reports 9:10752 / arXiv:1810.08678,
+#: Table 1. Used only for the comparison column of generated reports -- never
+#: mixed into measured numbers.
+#:
+#: Two MolDQN variants are reported there. ``naive`` is a single Q-network with
+#: epsilon-greedy exploration, which is what this code implements; ``bootstrap``
+#: adds an ensemble of Q-heads for exploration, which this code does not. The
+#: naive row is therefore the fair comparison and the bootstrap row is the
+#: paper's headline. ``random_walk`` is the paper's own random-action baseline,
+#: included because it is directly comparable to the random-edit baseline here.
+#:
+#: Table 1 reports the top three scores among "the last 100 terminal states in
+#: the training process", so the comparable measurement here is over *final*
+#: episode molecules, not the best molecule visited mid-episode.
+PUBLISHED_MOLDQN: Mapping[str, Mapping[str, object]] = {
+    "qed": {
+        "naive": (0.934, 0.931, 0.930),
+        "bootstrap": (0.948, 0.944, 0.943),
+        "random_walk": (0.64, 0.56, 0.56),
+        "max_steps": 40,
+    },
+    "penalized_logp": {
+        "naive": (11.51, 11.51, 11.50),
+        "bootstrap": (11.84, 11.84, 11.82),
+        "random_walk": (-3.99, -4.31, -4.37),
+        "max_steps": 38,
+    },
+}
+
+#: Table 2: mean and standard deviation of penalized logP improvement under a
+#: Tanimoto similarity constraint on the 800 lowest-penalized-logP ZINC
+#: molecules, one episode each, 20 steps per episode. Keyed by delta, values are
+#: ``(naive mean, naive sd, bootstrap mean, bootstrap sd, success rate)``.
+PUBLISHED_CONSTRAINED: Mapping[float, tuple[float, float, float, float, float]] = {
+    0.0: (6.83, 1.30, 7.04, 1.42, 1.0),
+    0.2: (5.00, 1.55, 5.06, 1.79, 1.0),
+    0.4: (3.13, 1.57, 3.37, 1.62, 1.0),
+    0.6: (1.40, 1.05, 1.86, 1.21, 1.0),
 }
 
 
 def comparison_rows(
     objective: str, metrics: Metrics
-) -> tuple[tuple[str, str, str], ...]:
-    """Return ``(label, measured, published)`` rows for a results table.
+) -> tuple[tuple[str, str, str, str], ...]:
+    """Return ``(label, measured, MolDQN-naive, MolDQN-bootstrap)`` table rows.
 
-    Objectives with no published MolDQN number get "n/a" in the published column
-    rather than a fabricated one.
+    ``metrics`` should be computed over *final* episode molecules, matching the
+    paper's protocol of reporting the top three of the last 100 terminal states.
+    An objective with no published number gets "n/a" rather than a fabricated
+    one.
     """
     published = PUBLISHED_MOLDQN.get(objective, {})
-    rows = []
-    for index, key in enumerate(("top1", "top2", "top3")):
-        measured = (
-            f"{metrics.top3[index]:.3f}" if index < len(metrics.top3) else "n/a"
+    naive = published.get("naive", ())
+    bootstrap = published.get("bootstrap", ())
+    rows: list[tuple[str, str, str, str]] = []
+    for index in range(3):
+        measured = f"{metrics.top3[index]:.3f}" if index < len(metrics.top3) else "n/a"
+        rows.append(
+            (
+                f"best #{index + 1}",
+                measured,
+                f"{naive[index]:.3f}" if index < len(naive) else "n/a",  # type: ignore[index]
+                f"{bootstrap[index]:.3f}" if index < len(bootstrap) else "n/a",  # type: ignore[index]
+            )
         )
-        reference = f"{published[key]:.3f}" if key in published else "n/a"
-        rows.append((f"best #{index + 1}", measured, reference))
-    rows.append((
-        "mean over run",
-        f"{metrics.objective_mean:.3f} +/- {metrics.objective_std:.3f}",
-        "not reported",
-    ))
+    rows.append(
+        (
+            "mean over run",
+            f"{metrics.objective_mean:.3f} +/- {metrics.objective_std:.3f}",
+            "not reported",
+            "not reported",
+        )
+    )
     return tuple(rows)
+
+
+def published_random_walk(objective: str) -> float | None:
+    """Return the paper's own random-action baseline best, if it reported one."""
+    values = PUBLISHED_MOLDQN.get(objective, {}).get("random_walk", ())
+    return float(values[0]) if values else None  # type: ignore[index]
+
+
+def constrained_comparison(delta: float, metrics: Metrics) -> str:
+    """Render the constrained-task comparison against Zhou et al. Table 2."""
+    published = PUBLISHED_CONSTRAINED.get(round(delta, 2))
+    measured = (
+        f"{metrics.improvement_mean:+.2f} +/- {metrics.improvement_std:.2f}, "
+        f"success {metrics.constraint_satisfied:.1%}"
+        if metrics.constraint_satisfied is not None
+        else f"{metrics.improvement_mean:+.2f} +/- {metrics.improvement_std:.2f}"
+    )
+    if published is None:
+        return (
+            f"constrained improvement at delta={delta:g}: {measured}\n"
+            f"  the paper reports deltas "
+            f"{', '.join(f'{d:g}' for d in sorted(PUBLISHED_CONSTRAINED))}; "
+            "no published value is quoted for this one"
+        )
+    naive_mean, naive_sd, boot_mean, boot_sd, success = published
+    return (
+        f"constrained improvement at delta={delta:g}\n"
+        f"  this run              {measured}\n"
+        f"  MolDQN-naive          {naive_mean:+.2f} +/- {naive_sd:.2f}, "
+        f"success {success:.0%}\n"
+        f"  MolDQN-bootstrap      {boot_mean:+.2f} +/- {boot_sd:.2f}, "
+        f"success {success:.0%}"
+    )
 
 
 def format_metrics(metrics: Metrics, title: str = "measured results") -> str:
