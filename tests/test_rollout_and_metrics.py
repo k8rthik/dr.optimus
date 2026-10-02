@@ -384,3 +384,35 @@ class TestRescore:
         records = (Generated("CCO", "CCCCO", 1.0, 0.0, 0.42),)
         rescore(records, make_objective("qed"))
         assert records[0].objective == pytest.approx(1.0)
+
+
+class TestUndertrainingWarning:
+    """Episodes are assigned to start molecules round-robin.
+
+    Training for as many episodes as there are start molecules shows each one
+    exactly once, which is an evaluation pass, not training. That mistake
+    produced a failed constrained run here, so it now warns.
+    """
+
+    def test_warns_on_a_single_pass(self, caplog) -> None:
+        import logging
+
+        starts = ["C", "CC", "CCC", "CCO"]
+        with caplog.at_level(logging.WARNING, logger="droptimus.train"):
+            train(small_run(episodes=4), start_molecules=starts)
+        assert "passes through the start set" in caplog.text
+
+    def test_silent_with_enough_passes(self, caplog) -> None:
+        import logging
+
+        starts = ["C", "CC"]
+        with caplog.at_level(logging.WARNING, logger="droptimus.train"):
+            train(small_run(episodes=4), start_molecules=starts)
+        assert "passes through the start set" not in caplog.text
+
+    def test_silent_for_a_single_start_molecule(self, caplog) -> None:
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="droptimus.train"):
+            train(small_run(episodes=1), start_molecules=["C"])
+        assert "passes through the start set" not in caplog.text

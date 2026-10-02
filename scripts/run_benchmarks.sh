@@ -72,13 +72,19 @@ train_bg qed-gnn-500 --objective qed --episodes 500 --encoder gnn $COMMON
 train_bg qed-fp-500  --objective qed --episodes 500 $COMMON
 
 # --- Phase 4: similarity-constrained improvement ---------------------------
-# ZINC800-logP: the 800 ZINC250k molecules with the lowest penalized logP, one
-# episode per start molecule, 20 steps to keep edits close to the original.
-mkdir -p runs/constrained-logp
-$PY -m droptimus.cli train --out runs/constrained-logp --device cpu --log-every 100 \
+# ZINC800-logP: the 800 ZINC250k molecules with the lowest penalized logP, 20
+# steps per episode to keep edits close to the original.
+#
+# Episodes must exceed the number of start molecules. The environment cycles
+# through the start set, so training for 800 episodes over 800 molecules shows
+# each one exactly once -- that is not training, it is a single evaluation pass,
+# and it is what the first attempt here did (runs/constrained-logp, kept in the
+# tables as the negative result). 2400 episodes is three passes.
+mkdir -p runs/constrained-logp-3pass
+$PY -m droptimus.cli train --out runs/constrained-logp-3pass --device cpu --log-every 200 \
   --objective constrained --base-objective penalized_logp --delta 0.4 \
-  --start-set zinc800-logp --start-set-size 800 --episodes 800 \
-  --max-steps 20 --max-atoms 40 --seed 0 > runs/constrained-logp/train.log 2>&1 &
+  --start-set zinc800-logp --start-set-size 800 --episodes 2400 \
+  --max-steps 20 --max-atoms 40 --seed 0 > runs/constrained-logp-3pass/train.log 2>&1 &
 wait
 echo "phases 3 and 4 done"
 
@@ -103,7 +109,8 @@ for name in ablate-qed-terminal ablate-qed-paper ablate-qed-dense \
 done
 # No exploration needed for the constrained task: 800 different start molecules
 # already give a distribution.
-evaluate_run constrained-logp --start-set zinc800-logp --episodes 800 --delta 0.4 --epsilon 0.0
+evaluate_run constrained-logp-3pass \
+  --start-set zinc800-logp --episodes 800 --delta 0.4 --epsilon 0.0
 
 # --- Phase 5: reward shaping for penalized logP ----------------------------
 # Penalized logP is maximized by a long carbon chain, so the task is really "add
