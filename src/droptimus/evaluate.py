@@ -47,7 +47,11 @@ class Metrics:
     improvement_std: float
     fraction_improved: float
     validity: float
+    #: Distinct molecules divided by molecules generated.
     uniqueness: float
+    #: Fraction of the *unique* molecules that appear in neither the reference
+    #: set nor the start molecules. Denominator is the unique count, not the
+    #: generated count, so novelty and uniqueness are independent.
     novelty: float
     similarity_mean: float
     similarity_min: float
@@ -297,7 +301,8 @@ def format_metrics(metrics: Metrics, title: str = "measured results") -> str:
         f"  validity       {metrics.validity:.3f} (1.000 by construction: "
         "the environment only proposes sanitizable molecules)",
         f"  uniqueness     {metrics.uniqueness:.3f}",
-        f"  novelty        {metrics.novelty:.3f} (vs reference set + start molecules)",
+        f"  novelty        {metrics.novelty:.3f} (fraction of the UNIQUE "
+        "molecules absent from the reference set and the start molecules)",
         f"  similarity     mean {metrics.similarity_mean:.3f}  "
         f"min {metrics.similarity_min:.3f}",
     ]
