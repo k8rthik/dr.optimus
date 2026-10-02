@@ -105,6 +105,18 @@ done
 # already give a distribution.
 evaluate_run constrained-logp --start-set zinc800-logp --episodes 800 --delta 0.4 --epsilon 0.0
 
+# --- Phase 5: reward shaping for penalized logP ----------------------------
+# Penalized logP is maximized by a long carbon chain, so the task is really "add
+# ~37 carbons". With terminal-only reward that signal has to propagate 40 steps
+# back; dense reward pays for each carbon immediately. Run solo, since it is the
+# last job.
+mkdir -p runs/logp-fp-dense-1200
+$PY -m droptimus.cli train --out runs/logp-fp-dense-1200 --device cpu --log-every 100 \
+  --objective penalized_logp --episodes 1200 --reward-mode dense $COMMON \
+  > runs/logp-fp-dense-1200/train.log 2>&1
+evaluate_run logp-fp-dense-1200 --start-set single --start C --episodes 100
+echo "phase 5 done"
+
 $PY scripts/make_report.py runs > runs/RESULTS.md
 $PY scripts/update_readme.py runs/RESULTS.md
 echo "results written to runs/RESULTS.md and spliced into README.md"
