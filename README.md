@@ -159,12 +159,13 @@ off them.
 ## Limitations
 
 **This is a benchmark reproduction, not a drug-discovery claim.** QED and
-penalized logP are cheap scalar proxies that the field uses because they are
-fast and public, not because they predict whether a molecule is a useful drug.
+penalized logP are cheap scalar proxies that the field uses because they are fast
+and public, not because they predict whether a molecule is a useful drug.
 Penalized logP in particular is famously gameable: its maximum over this action
-space is a long greasy carbon chain, which is exactly what an agent optimizing it
-produces. Nothing here was synthesized, assayed, or checked by a chemist. A high
-number in the table below means the agent found the optimum of a formula.
+space is a ~38-carbon chain, and the published 11.84 is the score of essentially
+that molecule. Nothing here was synthesized, assayed, or checked by a chemist. A
+high number in the tables above means an agent found the optimum of a formula,
+and nothing more.
 
 **Where this falls short of the published work.** See the comparison table
 above for the measured gap. The main reasons, in order of how much they
@@ -175,29 +176,35 @@ probably matter:
    45 minutes. The measured learning curves in `runs/*/history.json` were still
    improving when the budget ran out, so these numbers are a lower bound on what
    this code would reach, not its ceiling.
-2. **No bootstrapped-DQN ensemble.** The paper uses bootstrapped DQN (multiple
-   Q-heads, each trained on a resampled subset of experience) for exploration.
-   This implementation uses a single Q-head with epsilon-greedy exploration,
-   which explores less efficiently.
+2. **No bootstrapped-DQN ensemble.** The paper's headline numbers come from
+   bootstrapped DQN (multiple Q-heads, each trained on a resampled subset of
+   experience) for exploration. This implementation uses a single Q-head with
+   epsilon-greedy exploration. The paper reports that variant separately as
+   MolDQN-naive --- QED 0.934, penalized logP 11.51 --- so that, not 0.948 /
+   11.84, is the number this code should be measured against.
 3. **Subsampled bootstrap targets.** The Q-learning target maxes over the
    successor molecules, and a drug-sized molecule has several hundred of them.
    Scoring all of them for every transition in a batch dominates wall-clock
-   time, so `AgentConfig.bootstrap_actions` (default 48) subsamples the set. A
+   time, so `AgentConfig.bootstrap_actions` (default 16) subsamples the set. A
    max over a subset is biased low, so the learned values are slightly
-   pessimistic.
-4. **Almost no hyperparameter search.** Network width, replay capacity, discount
-   and target-sync interval are the paper's values or obvious defaults. Two
-   choices were made by measurement, both because they trade directly against
-   the wall-clock budget rather than because they flattered a result: the
-   learning rate (one probe over two values, 600 episodes each --- see the
-   ablation table) and `bootstrap_actions`. Nothing else was tuned.
+   pessimistic. One gradient step costs 27.5 ms at 48 and 13.5 ms at 16, so the
+   bias buys roughly twice as many gradient steps per minute.
+4. **A small hyperparameter probe, not a search.** Network width, replay
+   capacity, batch size and target-sync interval are the paper's values or
+   obvious defaults, untouched. What was probed, and is reported in the
+   configuration-probe table above rather than hidden: reward shaping (three
+   modes, 250 episodes each), the discount and learning rate as a 2x2 grid (600
+   episodes each), and `bootstrap_actions`. The discount probe argued *against*
+   my prior and the paper's 0.9 was kept. No probe used more than 600 episodes,
+   and none was run on the penalized-logP or constrained objectives, so those
+   inherit settings chosen on QED.
 
 **Objective-specific caveats.**
 
 - The similarity constraint is enforced with a steep linear penalty
-  (`PENALTY_WEIGHT = 20.0` objective units per unit of similarity shortfall)
-  rather than a hard rejection, because a hard wall gives the agent no gradient
-  back over the boundary. The reported fraction of molecules that actually meet
+  (`PENALTY_WEIGHT = 100.0` objective units per unit of similarity shortfall,
+  which is the lambda of the paper's section 3.2) rather than a hard rejection,
+  because a hard wall gives the agent no gradient back over the boundary. The reported fraction of molecules that actually meet
   the threshold is measured, so the softness cannot hide a failure --- but a
   "constrained" result with a satisfied fraction below 1.0 is not a constrained
   result for those molecules.
