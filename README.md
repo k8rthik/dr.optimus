@@ -175,17 +175,18 @@ probe on QED only was a real methodological cost.
 editing.** ZINC800-logP, delta = 0.4, 2400 training episodes (three passes over
 the 800 start molecules), scored on the best molecule each episode found:
 
-| delta = 0.4 | penalized logP improvement | improved | constraint satisfied |
-| --- | --- | --- | --- |
-| this run, trained agent | +0.74 +/- 2.27 | 27.8% | 95.5% |
-| this run, random-edit baseline | **+1.05 +/- 2.72** | **36.4%** | 94.4% |
-| MolDQN-naive | +3.13 +/- 1.57 | --- | 100% |
-| MolDQN-bootstrap | +3.37 +/- 1.62 | --- | 100% |
+| delta = 0.4 | penalized logP improvement | improved | constraint satisfied | best single |
+| --- | --- | --- | --- | --- |
+| this run, trained agent | +0.92 +/- 3.20 | 27.8% | 95.5% | +2.77 |
+| this run, random-edit baseline | **+1.38 +/- 4.10** | **36.4%** | 94.4% | +0.79 |
+| MolDQN-naive | +3.13 +/- 1.57 | --- | 100% | --- |
+| MolDQN-bootstrap | +3.37 +/- 1.62 | --- | 100% | --- |
 
-The random walk improves more molecules, by more, at the same constraint
-satisfaction. There is no reading of this on which the learned policy is doing
-useful work. An earlier single-pass run (800 episodes over 800 molecules, each
-seen exactly once --- see the limitations) was worse still at -0.76 +/- 3.99.
+The random walk improves more molecules, and by more, at the same constraint
+satisfaction rate. The trained policy's one best molecule is better (+2.77
+against +0.79), but on the metric the paper reports --- mean improvement across
+all 800 --- it loses to random editing. There is no reading of this table on which
+the learned policy is doing useful work.
 
 Two details matter for reading that table:
 
