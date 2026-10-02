@@ -120,36 +120,67 @@ was **not** reproduced by this code. Regenerate everything with
 
 ### The short version
 
-**The agent learns, and it does not reach the published numbers.** On QED from a
-single carbon atom it clearly improves over training, and it beats a random-edit
-baseline on the *mean* objective. It does not reliably beat the random baseline's
-*best* molecule, and it is far from MolDQN's reported 0.948. The gap is
-dominated by training budget: these runs are a small fraction of the paper's 5000
-episodes per objective, and the learning curves in `runs/*/history.json` had not
-flattened when the budget ran out. The honest summary is "a working
-implementation measured at a laptop-scale budget", not "a reproduction of the
-published result".
+Three results matter, and one of them is a failure.
 
-The random-edit baseline is a strong opponent here, and that is worth
-understanding rather than hiding: QED has a broad optimum, so 40 random
-valence-valid edits from a carbon atom often land on a mid-0.5 QED molecule, and
-the best of 100 such tries is around 0.79. Beating that reliably is the whole
-difficulty of the benchmark. The paper's own random-action baseline reached QED
-0.640 under its stricter terminal-state protocol, so a strong random baseline is
-expected rather than a sign that something is wrong here.
+**1. QED: the agent works, the graph encoder works better, and neither reaches
+the published number.** The best QED result here is the *GNN* encoder at 500
+episodes --- final-episode top three 0.822 / 0.811 / 0.805, mean 0.588 --- against
+MolDQN-naive's published 0.934 and MolDQN-bootstrap's 0.948. It beats the
+random-edit baseline clearly (final-episode mean 0.211, best 0.606).
 
-**Two protocols, and the gap between them is itself a measurement.** Much of
-this literature reports the best molecule *visited* during an episode. Zhou et
-al. Table 1 does something stricter: it scores the last 100 *terminal* states,
-the molecule each episode actually ended on. Both are reported below, and the
-published comparison uses the terminal-state numbers.
+**2. The graph encoder beat the fingerprint MLP with a quarter of the episodes.**
+At a matched 500 episodes, GNN final-episode mean 0.588 against the fingerprint
+MLP's 0.437; and the GNN at 500 episodes still beat the fingerprint MLP at
+*2000* episodes (0.502). Per episode the GNN costs about 3.5x more wall-clock
+(3.45 s against 0.98 s), so at matched wall-clock the gap narrows --- but per
+episode it is not close. **This is one seed per configuration.** The direction is
+suggestive, not established; a real claim would need several seeds, and the
+fingerprint MLP is what the paper used.
 
-The two differ a lot here, and that gap is diagnostic rather than cosmetic. The
-environment always offers a "no modification" action, so under a terminal reward
-the optimal policy is to reach a good molecule and then sit on it --- a converged
-agent would have no gap at all. The size of ours is a direct measure of how far
-from converged these runs are: the agent finds good molecules and then wanders
-off them.
+**3. Penalized logP failed, and failed in an informative way.** On the
+best-molecule-visited protocol the trained agent is *worse than its own random
+baseline*: agent best 0.430 against the random walk's +1.719 over the same 100
+episodes from the same start molecule. The agent only wins on the terminal-state
+protocol (mean -4.71 against -6.86), i.e. it ends on less-bad molecules than a
+random walk does while never finding better ones. Published MolDQN-naive gets
+11.51. Plainly: on this objective, at this budget, random editing finds better
+molecules than the learned policy does.
+
+The likely reason is the reward scale. Penalized logP runs from about -6 (a
+single carbon) to +11, and its optimum is a ~38-carbon chain, so the task is
+really "add 37 carbons in a row". With terminal-only reward and gamma = 0.9 over
+40 steps, the value of an early state is 0.9^39 ~ 0.015 times a number around
+-6, and the agent has essentially no gradient to climb. The configuration probe
+was run on QED only, so penalized logP inherited settings that may be actively
+wrong for it --- which is why there is also a dense-reward logP run in the tables.
+
+### Two protocols, and the gap between them is itself a measurement
+
+Much of this literature reports the best molecule *visited* during an episode.
+Zhou et al. Table 1 does something stricter: it scores the last 100 *terminal*
+states, the molecule each episode actually ended on. Both are reported below, and
+the published comparison uses the terminal-state numbers.
+
+The best-visited protocol flatters random search badly. The random-edit baseline
+here scores 0.493 mean on best-visited and 0.211 on terminal states --- 40 random
+edits pass through a decent molecule and then wander off it, and best-visited
+credits the pass-through. That is exactly why the paper scores terminal states,
+and it is why the paper's own random-action baseline reads 0.640 rather than
+something higher.
+
+The gap is diagnostic for the agent too. The environment always offers a "no
+modification" action, so under a terminal reward the optimal policy is to reach a
+good molecule and then sit on it --- a converged agent would show no gap at all.
+Ours still shows one, which measures how far from converged these runs are.
+
+### What the reward-shaping ablation did and did not show
+
+Three reward shapes at 250 QED episodes (terminal 0.525, dense 0.479, the
+reference implementation's per-step discounted reward 0.516, all best-visited
+means) all sit within noise of the random baseline's 0.493 best-visited mean. At
+that budget the ablation does not separate them, so it is reported as "no
+separation found" rather than as a ranking. The default stays `terminal` because
+it is the unambiguous episodic formulation, not because it won.
 
 <!-- RESULTS:START -->
 <!-- RESULTS:END -->
@@ -173,9 +204,11 @@ probably matter:
 
 1. **Training budget.** The paper trains for 5000 episodes per objective. These
    runs are much shorter, to keep a single training run on a laptop inside about
-   45 minutes. The measured learning curves in `runs/*/history.json` were still
-   improving when the budget ran out, so these numbers are a lower bound on what
-   this code would reach, not its ceiling.
+   45 minutes (the two 2000-episode runs took 47 minutes each, running two at a
+   time). The measured learning curves in `runs/*/history.json` were still
+   improving when the budget ran out, so the QED numbers are a lower bound on
+   what this code would reach, not its ceiling. For penalized logP the budget is
+   probably *not* the main problem --- see the reward-scale point below.
 2. **No bootstrapped-DQN ensemble.** The paper's headline numbers come from
    bootstrapped DQN (multiple Q-heads, each trained on a resampled subset of
    experience) for exploration. This implementation uses a single Q-head with
@@ -198,6 +231,14 @@ probably matter:
    my prior and the paper's 0.9 was kept. No probe used more than 600 episodes,
    and none was run on the penalized-logP or constrained objectives, so those
    inherit settings chosen on QED.
+
+5. **Reward scale on penalized logP.** The configuration probe ran on QED only,
+   and penalized logP has a very different reward scale (about -6 to +11, against
+   QED's [0, 1]). Combined with terminal-only reward and gamma = 0.9 over 40
+   steps, the learning signal at the start of an episode is on the order of 0.015
+   x -6, and the logP agent does not learn. This is a settings failure inherited
+   from an objective it was not probed on, not evidence that the implementation
+   cannot optimize penalized logP.
 
 **Objective-specific caveats.**
 
