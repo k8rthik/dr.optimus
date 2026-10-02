@@ -204,8 +204,9 @@ probably matter:
 - The similarity constraint is enforced with a steep linear penalty
   (`PENALTY_WEIGHT = 100.0` objective units per unit of similarity shortfall,
   which is the lambda of the paper's section 3.2) rather than a hard rejection,
-  because a hard wall gives the agent no gradient back over the boundary. The reported fraction of molecules that actually meet
-  the threshold is measured, so the softness cannot hide a failure --- but a
+  because a hard wall gives the agent no gradient back over the boundary. The
+  reported fraction of molecules that actually meet the threshold is measured, so
+  the softness cannot hide a failure --- but a
   "constrained" result with a satisfied fraction below 1.0 is not a constrained
   result for those molecules.
 - Novelty is measured against the first 50,000 ZINC250k molecules plus the start
@@ -248,10 +249,15 @@ constrained run does.
 
 **Engineering limits worth knowing.**
 
-- Molecules are capped at `--max-atoms` (38 by default, the paper's cap).
-  Enumerating the action space is quadratic in atom count, so this cap is a
-  wall-clock budget as much as a chemical choice: a 36-atom molecule takes about
-  34 ms per step to enumerate on an M3 Pro, against 2 ms for a 13-atom one.
+- Molecules are capped at `--max-atoms`, 38 by default. That number matches the
+  paper's 38-step budget for penalized logP, which bounds a molecule grown from
+  nothing to 38 heavy atoms; it is a wall-clock budget as much as a chemical
+  choice, since enumerating the action space is quadratic in atom count (a
+  36-atom molecule takes about 34 ms per step to enumerate on an M3 Pro, against
+  2 ms for a 13-atom one).
+- These runs use 40 steps per episode for both objectives. The paper used 40 for
+  QED and 38 for penalized logP, the latter to match GCPN's budget, so the logP
+  runs here are given two extra steps.
 - `--device auto` resolves to CPU, not MPS. This workload is many small forward
   passes, where kernel-launch overhead dominates; MPS measured 1.51 s/episode
   against 1.20 s/episode on CPU. `--device mps` is still available and would be
