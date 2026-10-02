@@ -116,6 +116,31 @@ def lowest_scoring(
     return tuple(ranked[:count])
 
 
+ZINC800_FILENAME = "zinc800_logp.smi"
+
+
+def zinc800_logp(
+    data_dir: Path | str = DEFAULT_DATA_DIR, count: int = ZINC800_SIZE
+) -> tuple[str, ...]:
+    """Return the ``count`` ZINC250k molecules with the lowest penalized logP.
+
+    Ranking all 249,456 molecules takes about two minutes, so the result is
+    cached next to the dataset. The cache is keyed by size: a request for a
+    different count recomputes and rewrites it.
+    """
+    from droptimus.objectives.logp import penalized_logp
+
+    cache = Path(data_dir) / ZINC800_FILENAME
+    if cache.exists():
+        cached = read_smiles(cache)
+        if len(cached) == count:
+            return cached
+    molecules = load_zinc_smiles(data_dir)
+    selected = lowest_scoring(molecules, penalized_logp, count=count)
+    write_smiles(selected, cache)
+    return selected
+
+
 def sample_molecules(
     molecules: tuple[str, ...], count: int, seed: int = 0
 ) -> tuple[str, ...]:
