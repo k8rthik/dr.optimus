@@ -67,7 +67,8 @@ Requires Python 3.12 and [uv](https://docs.astral.sh/uv/).
 ```bash
 uv venv --python 3.12
 uv pip install -e ".[dev]"
-.venv/bin/python -m pytest            # 254 tests, ~6 s
+.venv/bin/python -m pytest                              # 413 tests, ~15 s
+.venv/bin/python -m pytest --cov --cov-report=term      # 95% statement coverage
 ```
 
 Fetch the benchmark set (ZINC250k, 22 MB, gitignored):
@@ -93,7 +94,9 @@ droptimus evaluate --checkpoint runs/qed/checkpoint.pt --start-set single --star
 Reproduce every number in this README:
 
 ```bash
-scripts/run_benchmarks.sh      # 5 training runs + evaluations, ~40 min wall time
+scripts/run_benchmarks.sh                          # training runs + evaluations
+python scripts/make_report.py runs > runs/RESULTS.md
+python scripts/update_readme.py runs/RESULTS.md    # splices the tables in
 ```
 
 Invalid input fails fast and plainly:
@@ -188,6 +191,16 @@ probably matter:
 - Validity is 1.000 by construction, not by training: the environment only
   proposes candidates that pass `Chem.SanitizeMol`. It appears in the table to
   confirm the invariant holds, and it is not evidence about the model.
+
+**One configuration conclusion I got wrong, for the record.** With a terminal
+reward over a fixed 40-step horizon, an undiscounted return (gamma = 1) looks
+better motivated than the paper's gamma = 0.9, which makes an early state's value
+0.9^39 ~ 0.015 times the final objective --- a badly conditioned regression
+target. The mid-training logs appeared to confirm it. They were not comparable
+(different exploration rates, and a running best-so-far rather than a fixed
+evaluation), and the post-hoc evaluation reversed the result: gamma 1.0 was worse
+on every metric. The probe table above has both. The paper's value is the
+default.
 
 **Reward shaping differs from the reference implementation by default.**
 `--reward-mode terminal` (the default here) pays the objective once, at the
