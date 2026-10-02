@@ -43,26 +43,29 @@ def objective_table(runs: list[tuple[str, dict[str, Any] | None]]) -> str:
     header = [
         "run",
         "objective",
-        "episodes",
-        "best",
+        "n",
+        "greedy",
+        "best of n",
         "mean +/- sd",
-        "random baseline best",
-        "random baseline mean",
+        "baseline best",
+        "baseline mean",
         "published MolDQN best",
     ]
     lines = [_row(header), _row(["---"] * len(header))]
     for name, metrics in runs:
         if metrics is None:
-            lines.append(_row([name] + ["(no metrics.json)"] * (len(header) - 1)))
+            lines.append(_row([name, *["(no metrics.json)"] * (len(header) - 1)]))
             continue
         agent = metrics["agent"]
         baseline = metrics.get("random_baseline")
+        greedy = metrics.get("greedy")
         lines.append(
             _row(
                 [
                     name,
                     str(metrics["objective"]),
                     str(metrics["episodes"]),
+                    f"{greedy['objective']:.3f}" if greedy else "n/a",
                     f"{agent['objective_max']:.3f}",
                     f"{agent['objective_mean']:.3f} +/- {agent['objective_std']:.3f}",
                     f"{baseline['objective_max']:.3f}" if baseline else "not run",

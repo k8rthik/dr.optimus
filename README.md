@@ -140,10 +140,12 @@ probably matter:
    time, so `AgentConfig.bootstrap_actions` (default 48) subsamples the set. A
    max over a subset is biased low, so the learned values are slightly
    pessimistic.
-4. **No hyperparameter search.** Learning rate, network width, replay capacity
-   and target-sync interval are the paper's values or obvious defaults. Nothing
-   was tuned, because tuning on the test objective is how reproductions
-   accidentally become overfits.
+4. **Almost no hyperparameter search.** Network width, replay capacity, discount
+   and target-sync interval are the paper's values or obvious defaults. Two
+   choices were made by measurement, both because they trade directly against
+   the wall-clock budget rather than because they flattered a result: the
+   learning rate (one probe over two values, 600 episodes each --- see the
+   ablation table) and `bootstrap_actions`. Nothing else was tuned.
 
 **Objective-specific caveats.**
 
