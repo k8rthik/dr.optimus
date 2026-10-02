@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Reproduce every run reported in the README.
+# Reproduce every number in the README.
 #
-# Runs are grouped into phases of two or three concurrent jobs. Concurrency
-# matters: this workload is memory-bandwidth bound, so five concurrent jobs run
-# each episode about 4x slower than one job alone (1.15 s/episode solo, 1.6 s
-# with two jobs, 5.2 s with five). Two at a time keeps every individual run
+# Concurrency matters here. This workload is memory-bandwidth bound, so running
+# five jobs at once makes each episode about 4x slower than running one alone
+# (measured: 1.15 s/episode solo, 1.6 s with two jobs, 5.2 s with five). Runs are
+# therefore grouped into phases of two or three, which keeps every individual run
 # inside the 45-minute budget.
 #
-# Measured on an Apple M3 Pro (11 cores, 18 GB): about 100 minutes of wall time
-# end to end. Checkpoints, logs and metrics land in runs/, which is gitignored.
+# Measured end to end on an Apple M3 Pro (11 cores, 18 GB): about 80 minutes.
+# Checkpoints, logs and metrics land in runs/, which is gitignored.
 #
 # Usage:  scripts/run_benchmarks.sh
 set -euo pipefail
@@ -17,7 +17,8 @@ cd "$(dirname "$0")/.."
 PY=${PY:-.venv/bin/python}
 export OMP_NUM_THREADS=${OMP_NUM_THREADS:-4}
 
-COMMON="--device cpu --log-every 50 --start C --max-steps 40 --max-atoms 38 --seed 0"
+# Everything not named here comes from droptimus/config.py.
+COMMON="--device cpu --log-every 100 --start C --max-steps 40 --max-atoms 38 --seed 0"
 
 train_bg () {
   local name=$1; shift
@@ -29,48 +30,62 @@ train_bg () {
 
 $PY -m droptimus.cli download
 
-# --- Phase 1: reward-shaping ablation ---------------------------------------
-# Which reward shape to use is an empirical question, so it is measured rather
-# than assumed. 250 episodes each, three jobs concurrently.
+# --- Phase 1: configuration probes ------------------------------------------
+# Reward shaping and learning rate are empirical questions, so they are measured
+# rather than assumed. These are exploratory runs, reported separately from the
+# headline results so a probe cannot be mistaken for a result.
+# shellcheck disable=SC2086
 for mode in terminal paper dense; do
-  # shellcheck disable=SC2086
-  train_bg "ablate-qed-$mode" --objective qed --episodes 250 --reward-mode "$mode" $COMMON
+  train_bg "ablate-qed-$mode" --objective qed --episodes 250 --reward-mode "$mode" \
+    --bootstrap-actions 48 --learning-rate 1e-4 $COMMON
 done
+wait
+
+# The discount and learning-rate grid, at the cheaper bootstrap setting.
+# shellcheck disable=SC2086
+train_bg probe-lr5e-4      --objective qed --episodes 600 --learning-rate 5e-4 --discount 0.9 $COMMON
+# shellcheck disable=SC2086
+train_bg probe-g0.9-lr1e-4 --objective qed --episodes 600 --learning-rate 1e-4 --discount 0.9 $COMMON
+wait
+# shellcheck disable=SC2086
+train_bg probe-g1.0-lr5e-4 --objective qed --episodes 600 --learning-rate 5e-4 --discount 1.0 $COMMON
+# shellcheck disable=SC2086
+train_bg probe-g1.0-lr1e-4 --objective qed --episodes 600 --learning-rate 1e-4 --discount 1.0 $COMMON
 wait
 echo "phase 1 done"
 
 # --- Phase 2: headline single-objective runs --------------------------------
 # shellcheck disable=SC2086
-train_bg qed-fp-1200  --objective qed            --episodes 1200 $COMMON
+train_bg qed-fp-2000  --objective qed            --episodes 2000 $COMMON
 # shellcheck disable=SC2086
-train_bg logp-fp-1200 --objective penalized_logp --episodes 1200 $COMMON
+train_bg logp-fp-2000 --objective penalized_logp --episodes 2000 $COMMON
 wait
 echo "phase 2 done"
 
 # --- Phase 3: encoder comparison at a matched budget -----------------------
-# The GNN is ~3.7x slower per episode than the fingerprint MLP, so both get 400
-# episodes to make the comparison fair rather than giving the GNN fewer.
+# The GNN is several times slower per episode than the fingerprint MLP, so both
+# get 500 episodes -- a matched budget rather than matched wall-clock, so the
+# comparison is about the representation and not about who got more training.
 # shellcheck disable=SC2086
-train_bg qed-gnn-400 --objective qed --episodes 400 --encoder gnn $COMMON
+train_bg qed-gnn-500 --objective qed --episodes 500 --encoder gnn $COMMON
 # shellcheck disable=SC2086
-train_bg qed-fp-400  --objective qed --episodes 400 $COMMON
-wait
-echo "phase 3 done"
+train_bg qed-fp-500  --objective qed --episodes 500 $COMMON
 
 # --- Phase 4: similarity-constrained improvement ---------------------------
 # ZINC800-logP: the 800 ZINC250k molecules with the lowest penalized logP, one
 # episode per start molecule, 20 steps to keep edits close to the original.
 mkdir -p runs/constrained-logp
-$PY -m droptimus.cli train --device cpu --out runs/constrained-logp --log-every 50 \
+$PY -m droptimus.cli train --out runs/constrained-logp --device cpu --log-every 100 \
   --objective constrained --base-objective penalized_logp --delta 0.4 \
   --start-set zinc800-logp --start-set-size 800 --episodes 800 \
-  --max-steps 20 --max-atoms 40 --seed 0 > runs/constrained-logp/train.log 2>&1
-echo "phase 4 done"
+  --max-steps 20 --max-atoms 40 --seed 0 > runs/constrained-logp/train.log 2>&1 &
+wait
+echo "phases 3 and 4 done"
 
 # --- Evaluation -------------------------------------------------------------
-# Each evaluation samples 100 epsilon-greedy episodes, reports the deterministic
-# greedy rollout separately, and runs the same number of random-edit baseline
-# episodes from the same start molecules.
+# Each evaluation reports the deterministic greedy rollout, a distribution from
+# epsilon-greedy episodes, and the same number of random-edit baseline episodes
+# from the same start molecules.
 evaluate_run () {
   local name=$1; shift
   echo "evaluating $name"
@@ -78,13 +93,18 @@ evaluate_run () {
     --device cpu --out "runs/$name/metrics.json" "$@" > "runs/$name/evaluate.log" 2>&1
 }
 
-for name in ablate-qed-terminal ablate-qed-paper ablate-qed-dense \
-            qed-fp-1200 logp-fp-1200 qed-gnn-400 qed-fp-400; do
+for name in qed-fp-2000 logp-fp-2000 qed-gnn-500 qed-fp-500; do
   evaluate_run "$name" --start-set single --start C --episodes 100
 done
-# One greedy episode per ZINC800-logP start molecule; no exploration needed,
-# because the 800 different start molecules already give a distribution.
+# Probes use 60 episodes, enough to rank configurations and cheaper to run.
+for name in ablate-qed-terminal ablate-qed-paper ablate-qed-dense \
+            probe-lr5e-4 probe-g0.9-lr1e-4 probe-g1.0-lr5e-4 probe-g1.0-lr1e-4; do
+  evaluate_run "$name" --start-set single --start C --episodes 60 --novelty-reference-size 0
+done
+# No exploration needed for the constrained task: 800 different start molecules
+# already give a distribution.
 evaluate_run constrained-logp --start-set zinc800-logp --episodes 800 --delta 0.4 --epsilon 0.0
 
 $PY scripts/make_report.py runs > runs/RESULTS.md
-echo "results table written to runs/RESULTS.md"
+$PY scripts/update_readme.py runs/RESULTS.md
+echo "results written to runs/RESULTS.md and spliced into README.md"
