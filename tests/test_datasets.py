@@ -123,3 +123,53 @@ class TestZincLoading:
         (tmp_path / "zinc250k.csv").write_text("smiles\nnope\nalso-nope\n")
         with pytest.raises(DatasetError):
             load_zinc_smiles(tmp_path)
+
+
+class TestZinc800Cache:
+    """Ranking 249k molecules takes ~2 minutes, so the result is cached."""
+
+    def _tiny_zinc(self, tmp_path) -> None:
+        (tmp_path / "zinc250k.csv").write_text(
+            "smiles\nCCO\nCCCCCCCCCCCC\nc1ccccc1\nCC(=O)Oc1ccccc1C(=O)O\nCCN\n"
+        )
+
+    def test_returns_the_requested_count(self, tmp_path) -> None:
+        from droptimus.datasets import zinc800_logp
+
+        self._tiny_zinc(tmp_path)
+        assert len(zinc800_logp(tmp_path, count=3)) == 3
+
+    def test_writes_a_cache_file(self, tmp_path) -> None:
+        from droptimus.datasets import ZINC800_FILENAME, zinc800_logp
+
+        self._tiny_zinc(tmp_path)
+        zinc800_logp(tmp_path, count=3)
+        assert (tmp_path / ZINC800_FILENAME).exists()
+
+    def test_second_call_uses_the_cache(self, tmp_path) -> None:
+        from droptimus.datasets import zinc800_logp
+
+        self._tiny_zinc(tmp_path)
+        first = zinc800_logp(tmp_path, count=3)
+        # Remove the source dataset: a cache hit must not need it.
+        (tmp_path / "zinc250k.csv").unlink()
+        assert zinc800_logp(tmp_path, count=3) == first
+
+    def test_a_different_count_recomputes(self, tmp_path) -> None:
+        from droptimus.datasets import zinc800_logp
+
+        self._tiny_zinc(tmp_path)
+        zinc800_logp(tmp_path, count=2)
+        assert len(zinc800_logp(tmp_path, count=4)) == 4
+
+    def test_selection_is_the_lowest_scoring(self, tmp_path) -> None:
+        from droptimus.datasets import zinc800_logp
+        from droptimus.objectives.logp import penalized_logp
+
+        self._tiny_zinc(tmp_path)
+        selected = zinc800_logp(tmp_path, count=2)
+        all_molecules = load_zinc_smiles(tmp_path)
+        rest = [m for m in all_molecules if m not in selected]
+        assert max(penalized_logp(m) for m in selected) <= min(
+            penalized_logp(m) for m in rest
+        )

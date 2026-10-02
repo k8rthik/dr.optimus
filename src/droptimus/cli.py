@@ -36,8 +36,8 @@ from droptimus.datasets import (
     download_zinc250k,
     load_fixture,
     load_zinc_smiles,
-    lowest_scoring,
     sample_molecules,
+    zinc800_logp,
 )
 from droptimus.errors import DrOptimusError
 from droptimus.evaluate import (
@@ -47,7 +47,6 @@ from droptimus.evaluate import (
     generated_from_episodes,
 )
 from droptimus.objectives import available_objectives
-from droptimus.objectives.logp import penalized_logp
 from droptimus.train import collect_episodes, train
 
 LOGGER = logging.getLogger("droptimus")
@@ -315,12 +314,12 @@ def resolve_start_set(
         molecules = load_zinc_smiles(data_dir)
         return sample_molecules(molecules, min(count, len(molecules)), seed=seed)
     if kind == "zinc800-logp":
-        molecules = load_zinc_smiles(data_dir)
         LOGGER.info(
-            "ranking %d ZINC molecules by penalized logP (one-off, ~2 minutes)",
-            len(molecules),
+            "loading the %d lowest-penalized-logP ZINC molecules "
+            "(ranking all 249k takes ~2 minutes the first time, then it is cached)",
+            count,
         )
-        return lowest_scoring(molecules, penalized_logp, count=min(count, len(molecules)))
+        return zinc800_logp(data_dir, count=count)
     raise DrOptimusError(
         f"Unknown start set {kind!r}; choose one of {', '.join(START_SET_CHOICES)}."
     )
