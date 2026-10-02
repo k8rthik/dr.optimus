@@ -223,3 +223,84 @@ class TestEndToEnd:
             == 0
         )
         assert "random-edit baseline" not in capsys.readouterr().out
+
+
+class TestEvaluationSampling:
+    """A deterministic greedy policy needs exploration to yield a distribution."""
+
+    def test_default_epsilon_is_nonzero(self) -> None:
+        from droptimus.cli import EVAL_EPSILON
+
+        args = build_parser().parse_args(["evaluate", "--checkpoint", "x.pt"])
+        assert args.epsilon == EVAL_EPSILON
+        assert EVAL_EPSILON > 0.0
+
+    def test_greedy_rollouts_from_one_start_are_identical(self) -> None:
+        """Why the default epsilon is nonzero, pinned as a test."""
+        import random as _random
+
+        from droptimus.agent.dqn import DoubleDQNAgent
+        from droptimus.config import AgentConfig, EnvConfig, RunConfig, TrainConfig
+        from droptimus.train import collect_episodes
+
+        env = EnvConfig(atom_types=("C", "N", "O"), max_steps=4, max_atoms=8)
+        agent_config = AgentConfig(hidden_sizes=(16, 8), batch_size=4, replay_capacity=32)
+        agent = DoubleDQNAgent(agent_config, env, device="cpu", seed=0)
+        config = RunConfig(
+            objective="qed",
+            start_smiles="C",
+            env=env,
+            agent=agent_config,
+            train=TrainConfig(episodes=1, device="cpu"),
+        )
+        episodes = collect_episodes(
+            config, ["C"] * 5, agent, epsilon=0.0, rng=_random.Random(0)
+        )
+        assert len({e.best_smiles for e in episodes}) == 1
+
+    def test_exploration_produces_more_than_one_molecule(self) -> None:
+        import random as _random
+
+        from droptimus.agent.dqn import DoubleDQNAgent
+        from droptimus.config import AgentConfig, EnvConfig, RunConfig, TrainConfig
+        from droptimus.train import collect_episodes
+
+        env = EnvConfig(atom_types=("C", "N", "O"), max_steps=5, max_atoms=8)
+        agent_config = AgentConfig(hidden_sizes=(16, 8), batch_size=4, replay_capacity=32)
+        agent = DoubleDQNAgent(agent_config, env, device="cpu", seed=0)
+        config = RunConfig(
+            objective="qed",
+            start_smiles="C",
+            env=env,
+            agent=agent_config,
+            train=TrainConfig(episodes=1, device="cpu"),
+        )
+        episodes = collect_episodes(
+            config, ["C"] * 12, agent, epsilon=0.5, rng=_random.Random(0)
+        )
+        assert len({e.best_smiles for e in episodes}) > 1
+
+    def test_evaluate_reports_the_greedy_rollout(self, tmp_path, capsys) -> None:
+        out = tmp_path / "run"
+        main([*TINY_TRAIN, "--out", str(out)])
+        capsys.readouterr()
+        code = main(
+            [
+                "evaluate",
+                "--checkpoint",
+                str(out / "checkpoint.pt"),
+                "--start-set",
+                "single",
+                "--start",
+                "C",
+                "--episodes",
+                "4",
+                "--device",
+                "cpu",
+                "--novelty-reference-size",
+                "0",
+                "--no-baseline",
+            ]
+        )
+        assert code == 0
+        assert "greedy rollout (epsilon 0)" in capsys.readouterr().out
