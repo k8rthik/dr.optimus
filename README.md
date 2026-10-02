@@ -43,8 +43,8 @@ network scores one candidate molecule at a time and the agent takes the argmax:
   (single/double/triple/aromatic), masked mean+max pooling, then the same head.
 
 Target: `y = r + gamma * Q_target(argmax_a' Q_online(a'))`. Huber loss, Adam,
-gradient clipping. PyTorch, CPU or MPS (see
-[Why CPU and not MPS](#why-cpu-and-not-mps)).
+gradient clipping. PyTorch on CPU or MPS; `--device auto` picks CPU, and
+[Limitations](#limitations) says why.
 
 **Objectives** (`droptimus/objectives/`) --- a registry; `make_objective(name)`
 builds one:
@@ -80,8 +80,9 @@ Fetch the benchmark set (ZINC250k, 22 MB, gitignored):
 Train, optimize a single molecule, evaluate:
 
 ```bash
-# QED from a single carbon atom, 1500 episodes x 40 steps (~30 min on an M3 Pro)
-droptimus train --objective qed --start C --episodes 1500 --out runs/qed
+# QED from a single carbon atom, 2000 episodes x 40 steps (~30 min on an M3 Pro
+# with nothing else running; see the throughput table below)
+droptimus train --objective qed --start C --episodes 2000 --out runs/qed
 
 # Edit one molecule with a trained agent
 droptimus optimize "CCOc1ccccc1C(=O)O" --checkpoint runs/qed/checkpoint.pt --show-trajectory
@@ -207,6 +208,23 @@ default.
 horizon. The reference implementation pays `objective * discount^(steps left)` at
 *every* step, which is available as `--reward-mode paper`. Returns are not
 comparable between modes; the measured comparison is in the table above.
+
+**An agent trained from one start molecule transfers poorly.** The
+single-objective runs start every episode from a single carbon atom, so they
+learn to *build* a good molecule from nothing and have never seen a drug-sized
+input. Pointed at one, they tend to sit still:
+
+```
+$ droptimus optimize "CCOc1ccccc1C(=O)O" --checkpoint runs/qed-fp-2000/checkpoint.pt
+start      CCOc1ccccc1C(=O)O
+objective  qed = +0.7440
+best       CCOc1ccccc1C(=O)O
+objective  qed = +0.7440 (+0.0000)
+```
+
+For editing arbitrary molecules, use a checkpoint trained over a start *set*
+(`--start-set zinc800-logp` or `--start-set zinc-sample`), which is what the
+constrained run does.
 
 **Engineering limits worth knowing.**
 
