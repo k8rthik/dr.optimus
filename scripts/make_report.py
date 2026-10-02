@@ -17,9 +17,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
-#: Best single-molecule values reported by Zhou et al. (2019), for the
-#: comparison column only. These were NOT produced by this code.
-PUBLISHED_BEST = {"qed": 0.948, "penalized_logp": 11.84}
+# Published values live in droptimus.evaluate, transcribed from the paper and
+# guarded by a test, so this script has a single source for them.
+from droptimus.evaluate import PUBLISHED_MOLDQN
 
 #: Runs whose names start with these are exploratory, not headline results.
 PROBE_PREFIXES = ("ablate-", "probe-")
@@ -90,7 +90,8 @@ def objective_table(runs: list[Run]) -> str:
         "mean +/- sd",
         "random baseline best",
         "random baseline mean",
-        "published MolDQN best",
+        "MolDQN-naive best",
+        "MolDQN-bootstrap best",
     ]
     rows = []
     for run in runs:
@@ -101,7 +102,9 @@ def objective_table(runs: list[Run]) -> str:
         baseline = run.metrics.get("random_baseline")
         greedy = run.metrics.get("greedy")
         objective = str(run.metrics["objective"])
-        published = PUBLISHED_BEST.get(objective)
+        published = PUBLISHED_MOLDQN.get(objective, {})
+        naive = published.get("naive", ())
+        bootstrap = published.get("bootstrap", ())
         rows.append(
             [
                 run.name,
@@ -114,7 +117,43 @@ def objective_table(runs: list[Run]) -> str:
                 f"{baseline['objective_mean']:.3f} +/- {baseline['objective_std']:.3f}"
                 if baseline
                 else "not run",
-                f"{published:.3f}" if published is not None else "n/a",
+                f"{naive[0]:.3f}" if naive else "n/a",
+                f"{bootstrap[0]:.3f}" if bootstrap else "n/a",
+            ]
+        )
+    return _table(header, rows)
+
+
+def final_episode_table(runs: list[Run]) -> str:
+    """The paper's protocol: the molecule each episode actually ended on."""
+    header = [
+        "run",
+        "objective",
+        "best of n (final)",
+        "mean +/- sd (final)",
+        "baseline best (final)",
+        "MolDQN-naive best",
+        "MolDQN-bootstrap best",
+    ]
+    rows = []
+    for run in runs:
+        if run.metrics is None or "agent_final" not in run.metrics:
+            continue
+        final = run.metrics["agent_final"]
+        baseline = run.metrics.get("random_baseline_final")
+        objective = str(run.metrics["objective"])
+        published = PUBLISHED_MOLDQN.get(objective, {})
+        naive = published.get("naive", ())
+        bootstrap = published.get("bootstrap", ())
+        rows.append(
+            [
+                run.name,
+                objective,
+                f"{final['objective_max']:.3f}",
+                f"{final['objective_mean']:.3f} +/- {final['objective_std']:.3f}",
+                f"{baseline['objective_max']:.3f}" if baseline else "not run",
+                f"{naive[0]:.3f}" if naive else "n/a",
+                f"{bootstrap[0]:.3f}" if bootstrap else "n/a",
             ]
         )
     return _table(header, rows)
@@ -232,6 +271,17 @@ def main(argv: list[str]) -> int:
         "uniformly among valid edits.\n"
     )
     print(objective_table(headline))
+    print(
+        "\n### Final-episode molecules (the paper's protocol)\n"
+    )
+    print(
+        "Zhou et al. Table 1 reports the top three scores among the last 100 "
+        "*terminal* states, so this is the table to compare against the "
+        "published column. MolDQN-naive is a single Q-network with "
+        "epsilon-greedy exploration, which is what this code implements; "
+        "MolDQN-bootstrap adds an ensemble of Q-heads, which it does not.\n"
+    )
+    print(final_episode_table(headline))
     print("\n### Generation quality\n")
     print(quality_table(headline))
     print(

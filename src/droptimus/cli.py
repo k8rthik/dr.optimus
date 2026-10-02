@@ -44,8 +44,10 @@ from droptimus.errors import DrOptimusError
 from droptimus.evaluate import (
     comparison_rows,
     compute_metrics,
+    constrained_comparison,
     format_metrics,
     generated_from_episodes,
+    published_random_walk,
 )
 from droptimus.objectives import available_objectives
 from droptimus.train import collect_episodes, train
@@ -471,13 +473,24 @@ def command_evaluate(args: argparse.Namespace) -> int:
     agent_episodes = collect_episodes(
         config, starts, agent, epsilon=args.epsilon, rng=random.Random(args.seed)
     )
-    agent_metrics = compute_metrics(
-        generated_from_episodes(agent_episodes),
-        reference=reference,
-        similarity_delta=delta,
-    )
+
+    def measure(episodes, use_best: bool):
+        return compute_metrics(
+            generated_from_episodes(episodes, use_best=use_best),
+            reference=reference,
+            similarity_delta=delta,
+        )
+
+    # Two protocols, both reported. "best visited" is the generous reading used
+    # by much of this literature; "final" is the molecule the episode actually
+    # ended on, which is what Zhou et al. Table 1 reports (the top three of the
+    # last 100 terminal states), so it is the one the published comparison uses.
+    agent_metrics = measure(agent_episodes, use_best=True)
+    agent_final = measure(agent_episodes, use_best=False)
     print()
-    print(format_metrics(agent_metrics, "trained agent"))
+    print(format_metrics(agent_metrics, "trained agent, best molecule visited"))
+    print()
+    print(format_metrics(agent_final, "trained agent, final molecule of episode"))
 
     payload: dict[str, object] = {
         "checkpoint": str(args.checkpoint),
@@ -490,26 +503,30 @@ def command_evaluate(args: argparse.Namespace) -> int:
             "start_smiles": greedy.start_smiles,
             "smiles": greedy.best_smiles,
             "objective": greedy.best_objective,
+            "final_smiles": greedy.final_smiles,
+            "final_objective": greedy.final_objective,
             "start_objective": greedy.start_objective,
         },
         "agent": agent_metrics.as_dict(),
+        "agent_final": agent_final.as_dict(),
     }
 
     if not args.no_baseline:
         baseline_episodes = collect_episodes(
             config, starts, None, rng=random.Random(args.seed + 1)
         )
-        baseline_metrics = compute_metrics(
-            generated_from_episodes(baseline_episodes),
-            reference=reference,
-            similarity_delta=delta,
-        )
+        baseline_metrics = measure(baseline_episodes, use_best=True)
+        baseline_final = measure(baseline_episodes, use_best=False)
         print()
-        print(format_metrics(baseline_metrics, "random-edit baseline"))
+        print(format_metrics(baseline_metrics, "random-edit baseline, best visited"))
         payload["random_baseline"] = baseline_metrics.as_dict()
+        payload["random_baseline_final"] = baseline_final.as_dict()
 
     print()
-    print(_published_comparison(config.objective, agent_metrics))
+    print(_published_comparison(config.objective, agent_final))
+    if delta is not None:
+        print()
+        print(constrained_comparison(float(delta), agent_final))
 
     if args.out:
         destination = Path(args.out)
@@ -534,14 +551,30 @@ def _novelty_reference(args: argparse.Namespace) -> tuple[str, ...]:
 
 
 def _published_comparison(objective: str, metrics) -> str:
+    """Compare final-episode molecules against Zhou et al. (2019) Table 1.
+
+    MolDQN-naive is a single Q-network with epsilon-greedy exploration, which is
+    what this code implements; MolDQN-bootstrap adds an ensemble of Q-heads for
+    exploration, which it does not. Naive is the fair comparison.
+    """
     rows = comparison_rows(objective, metrics)
     width = max(len(row[0]) for row in rows)
     lines = [
-        "measured vs published MolDQN (Zhou et al. 2019, Sci Rep 9:10752)",
-        f"  {'metric'.ljust(width)}  {'this run':>22}  {'published':>12}",
+        "final-episode molecules vs published MolDQN "
+        "(Zhou et al. 2019, Sci Rep 9:10752, Table 1)",
+        f"  {'metric'.ljust(width)}  {'this run':>22}  {'MolDQN-naive':>14}"
+        f"  {'MolDQN-bootstrap':>17}",
     ]
-    for label, measured, published in rows:
-        lines.append(f"  {label.ljust(width)}  {measured:>22}  {published:>12}")
+    for label, measured, naive, bootstrap in rows:
+        lines.append(
+            f"  {label.ljust(width)}  {measured:>22}  {naive:>14}  {bootstrap:>17}"
+        )
+    random_walk = published_random_walk(objective)
+    if random_walk is not None:
+        lines.append(
+            f"  (the paper's own random-action baseline reached "
+            f"{random_walk:.3f} on this objective)"
+        )
     return "\n".join(lines)
 
 

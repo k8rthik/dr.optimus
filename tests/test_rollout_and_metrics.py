@@ -196,12 +196,46 @@ class TestComparisonRows:
             )
         )
         rows = comparison_rows("qed", metrics)
-        assert rows[0] == ("best #1", "0.900", "0.948")
+        # (label, this run, MolDQN-naive, MolDQN-bootstrap) -- the naive variant
+        # is the single-Q-head epsilon-greedy model this code implements.
+        assert rows[0] == ("best #1", "0.900", "0.934", "0.948")
 
     def test_unknown_objective_has_no_fabricated_reference(self) -> None:
         metrics = compute_metrics((Generated("C", "CC", 0.9, 0.1, 0.1),))
         rows = comparison_rows("similarity", metrics)
-        assert all(row[2] in {"n/a", "not reported"} for row in rows)
+        assert all(
+            row[2] in {"n/a", "not reported"} and row[3] in {"n/a", "not reported"}
+            for row in rows
+        )
+
+    def test_published_values_match_the_paper(self) -> None:
+        """Transcription guard for Zhou et al. (2019) Tables 1 and 2."""
+        from droptimus.evaluate import PUBLISHED_CONSTRAINED, PUBLISHED_MOLDQN
+
+        assert PUBLISHED_MOLDQN["qed"]["bootstrap"] == (0.948, 0.944, 0.943)
+        assert PUBLISHED_MOLDQN["qed"]["naive"] == (0.934, 0.931, 0.930)
+        assert PUBLISHED_MOLDQN["penalized_logp"]["bootstrap"] == (11.84, 11.84, 11.82)
+        assert PUBLISHED_MOLDQN["penalized_logp"]["naive"] == (11.51, 11.51, 11.50)
+        # Table 2, delta = 0.4
+        assert PUBLISHED_CONSTRAINED[0.4] == (3.13, 1.57, 3.37, 1.62, 1.0)
+
+    def test_constrained_comparison_quotes_the_published_delta(self) -> None:
+        from droptimus.evaluate import constrained_comparison
+
+        metrics = compute_metrics(
+            (Generated("CCO", "CCCO", 2.0, 1.0, 0.8),), similarity_delta=0.4
+        )
+        text = constrained_comparison(0.4, metrics)
+        assert "MolDQN-naive" in text and "3.13" in text and "3.37" in text
+
+    def test_constrained_comparison_does_not_invent_a_delta(self) -> None:
+        from droptimus.evaluate import constrained_comparison
+
+        metrics = compute_metrics(
+            (Generated("CCO", "CCCO", 2.0, 1.0, 0.8),), similarity_delta=0.35
+        )
+        text = constrained_comparison(0.35, metrics)
+        assert "no published value is quoted" in text
 
     def test_missing_measurements_are_not_invented(self) -> None:
         metrics = compute_metrics((Generated("C", "CC", 0.9, 0.1, 0.1),))

@@ -25,9 +25,12 @@ from droptimus.objectives.base import Objective
 from droptimus.objectives.registry import make_objective, register_objective
 
 #: Slope of the constraint penalty, in objective units per unit of similarity
-#: shortfall. Large enough that no realistic objective gain pays for a
-#: meaningful violation.
-PENALTY_WEIGHT: float = 20.0
+#: shortfall. This is the lambda of Zhou et al. (2019) section 3.2, whose
+#: constrained reward is
+#:     R(m) = base(m) - lambda * (delta - SIM(m, m0))  if SIM < delta
+#:     R(m) = base(m)                                  otherwise
+#: with lambda = 100 in their experiments.
+PENALTY_WEIGHT: float = 100.0
 
 
 def _require_reference(reference: object) -> str:
