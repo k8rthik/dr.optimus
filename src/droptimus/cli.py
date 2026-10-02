@@ -35,10 +35,7 @@ from droptimus.datasets import (
     DEFAULT_DATA_DIR,
     ZINC800_SIZE,
     download_zinc250k,
-    load_fixture,
     load_zinc_smiles,
-    sample_molecules,
-    zinc800_logp,
 )
 from droptimus.errors import DrOptimusError
 from droptimus.evaluate import (
@@ -50,11 +47,15 @@ from droptimus.evaluate import (
     published_random_walk,
 )
 from droptimus.objectives import available_objectives
+from droptimus.start_sets import (
+    START_SET_CHOICES,
+    novelty_reference,
+    parse_atom_types,
+    resolve_start_set,
+)
 from droptimus.train import collect_episodes, train
 
 LOGGER = logging.getLogger("droptimus")
-
-START_SET_CHOICES = ("single", "fixture", "zinc-sample", "zinc800-logp")
 
 #: Exploration rate used when sampling the evaluation distribution. The greedy
 #: policy is deterministic in a deterministic environment, so repeated greedy
@@ -241,28 +242,6 @@ def _add_run_arguments(parser: argparse.ArgumentParser) -> None:
 # --- config assembly -------------------------------------------------------
 
 
-def _parse_atom_types(raw: str) -> tuple[str, ...]:
-    """Parse ``--atom-types``.
-
-    Raises:
-        DrOptimusError: if the list is empty or an element is unknown to RDKit.
-    """
-    from rdkit import Chem
-
-    elements = tuple(part.strip() for part in raw.split(",") if part.strip())
-    if not elements:
-        raise DrOptimusError("--atom-types must name at least one element, e.g. 'C,N,O'.")
-    table = Chem.GetPeriodicTable()
-    for element in elements:
-        try:
-            table.GetAtomicNumber(element)
-        except RuntimeError as exc:
-            raise DrOptimusError(
-                f"{element!r} in --atom-types is not an element symbol."
-            ) from exc
-    return elements
-
-
 def run_config_from_args(args: argparse.Namespace) -> RunConfig:
     """Build a RunConfig from parsed ``train`` arguments."""
     objective = args.objective.strip().lower()
@@ -283,7 +262,7 @@ def run_config_from_args(args: argparse.Namespace) -> RunConfig:
         objective=objective,
         start_smiles=start_smiles,
         env=EnvConfig(
-            atom_types=_parse_atom_types(args.atom_types),
+            atom_types=parse_atom_types(args.atom_types),
             max_steps=args.max_steps,
             max_atoms=args.max_atoms,
             max_actions=args.max_actions,
@@ -306,40 +285,6 @@ def run_config_from_args(args: argparse.Namespace) -> RunConfig:
             log_every=args.log_every,
         ),
         objective_kwargs=objective_kwargs,  # type: ignore[arg-type]
-    )
-
-
-def resolve_start_set(
-    kind: str,
-    count: int,
-    single: str | None,
-    data_dir: str | Path = DEFAULT_DATA_DIR,
-    seed: int = 0,
-) -> tuple[str, ...]:
-    """Return the start molecules named by ``kind``.
-
-    Raises:
-        DrOptimusError: for an unknown kind, or a missing dataset.
-    """
-    if kind == "single":
-        if not single:
-            raise DrOptimusError("--start-set single needs --start '<SMILES>'.")
-        return (canonical_smiles(single),)
-    if kind == "fixture":
-        molecules = load_fixture()
-        return molecules[: min(count, len(molecules))]
-    if kind == "zinc-sample":
-        molecules = load_zinc_smiles(data_dir)
-        return sample_molecules(molecules, min(count, len(molecules)), seed=seed)
-    if kind == "zinc800-logp":
-        LOGGER.info(
-            "loading the %d lowest-penalized-logP ZINC molecules "
-            "(ranking all 249k takes ~2 minutes the first time, then it is cached)",
-            count,
-        )
-        return zinc800_logp(data_dir, count=count)
-    raise DrOptimusError(
-        f"Unknown start set {kind!r}; choose one of {', '.join(START_SET_CHOICES)}."
     )
 
 
@@ -444,7 +389,9 @@ def command_evaluate(args: argparse.Namespace) -> int:
         agent, metadata, starts[0], args.delta, args.seed, args.device
     )
 
-    reference = _novelty_reference(args)
+    reference = novelty_reference(
+        args.novelty_reference_size, args.data_dir
+    )
     delta = args.delta
     if delta is None and config.objective == "constrained":
         delta = dict(config.objective_kwargs).get("delta")  # type: ignore[arg-type]
@@ -534,20 +481,6 @@ def command_evaluate(args: argparse.Namespace) -> int:
         destination.write_text(json.dumps(payload, indent=2) + "\n")
         print(f"\nmetrics written to {destination}")
     return 0
-
-
-def _novelty_reference(args: argparse.Namespace) -> tuple[str, ...]:
-    """Load the novelty reference set, falling back to the committed fixture."""
-    if args.novelty_reference_size < 1:
-        return ()
-    try:
-        return load_zinc_smiles(args.data_dir, limit=args.novelty_reference_size)
-    except DrOptimusError:
-        LOGGER.warning(
-            "ZINC250k is not available; measuring novelty against the committed "
-            "200-molecule fixture instead. Run `droptimus download` for the full set."
-        )
-        return load_fixture()
 
 
 def _published_comparison(objective: str, metrics) -> str:
