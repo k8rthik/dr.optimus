@@ -146,13 +146,28 @@ random walk does while never finding better ones. Published MolDQN-naive gets
 11.51. Plainly: on this objective, at this budget, random editing finds better
 molecules than the learned policy does.
 
-The likely reason is the reward scale. Penalized logP runs from about -6 (a
-single carbon) to +11, and its optimum is a ~38-carbon chain, so the task is
-really "add 37 carbons in a row". With terminal-only reward and gamma = 0.9 over
-40 steps, the value of an early state is 0.9^39 ~ 0.015 times a number around
--6, and the agent has essentially no gradient to climb. The configuration probe
-was run on QED only, so penalized logP inherited settings that may be actively
-wrong for it --- which is why there is also a dense-reward logP run in the tables.
+The reason looks like reward scale, and switching the reward shape confirms about
+half of it. Penalized logP runs from about -6 (a single carbon) to +11, and its
+optimum is a ~38-carbon chain, so the task is really "add 37 carbons in a row".
+With terminal-only reward and gamma = 0.9 over 40 steps, the value of an early
+state is 0.9^39 ~ 0.015 times a number around -6, and the agent has almost no
+gradient to climb. Paying the per-step change in objective instead
+(`--reward-mode dense`, 1200 episodes) moves every number:
+
+| penalized logP | terminal, 2000 ep | dense, 1200 ep | random baseline | MolDQN-naive |
+| --- | --- | --- | --- | --- |
+| best visited, max | -0.430 | **+1.432** | +1.719 | n/a |
+| best visited, mean | -1.752 | **-0.237** | -1.010 | n/a |
+| final episode, max | -0.695 | **-0.424** | -3.405 | 11.51 |
+| final episode, mean | -4.705 | **-2.215** | -6.855 | n/a |
+
+The dense agent also visibly learns the right *idea*: its best molecule over
+training is hexane (`CCCCCC`, +2.472), i.e. it has worked out that the answer is
+a carbon chain and simply does not extend one far enough. It still does not beat
+the random baseline's single best molecule (+1.432 against +1.719), and it is
+nowhere near 11.51. So reward shaping explains a large part of the failure but not
+all of it, and the configuration probe having been run on QED only was a real
+methodological cost.
 
 ### Two protocols, and the gap between them is itself a measurement
 
