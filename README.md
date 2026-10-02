@@ -177,10 +177,16 @@ the 800 start molecules), scored on the best molecule each episode found:
 
 | delta = 0.4 | penalized logP improvement | improved | constraint satisfied | best single |
 | --- | --- | --- | --- | --- |
-| this run, trained agent | +0.92 +/- 3.20 | 27.8% | 95.5% | +2.77 |
-| this run, random-edit baseline | **+1.38 +/- 4.10** | **36.4%** | 94.4% | +0.79 |
+| trained agent, 2400 episodes | +0.92 +/- 3.20 | 27.8% | 95.5% | +2.77 |
+| trained agent, 800 episodes | +0.97 +/- 2.62 | 33.8% | 96.0% | +1.22 |
+| random-edit baseline | **+1.38 +/- 4.10** | **36.4%** | 94.4% | +0.79 |
 | MolDQN-naive | +3.13 +/- 1.57 | --- | 100% | --- |
 | MolDQN-bootstrap | +3.37 +/- 1.62 | --- | 100% | --- |
+
+Tripling the training budget changed nothing here: 800 episodes and 2400 episodes
+land in the same place, and the longer run improves *fewer* molecules. So the
+single-pass setup error (described in the limitations) was a real bug worth
+fixing, and it was not what caused this failure.
 
 The random walk improves more molecules, and by more, at the same constraint
 satisfaction rate. The trained policy's one best molecule is better (+2.77
@@ -365,10 +371,11 @@ probably matter:
 
 6. **The first constrained run trained for one pass over its start set.** 800
    episodes over 800 start molecules assigns each molecule exactly one episode,
-   which is an evaluation pass, not training. `train()` now warns when the start
-   set is cycled fewer than twice. The three-pass run (2400 episodes) is the one
-   reported above; the one-pass run is kept in the tables as the worse result it
-   produced.
+   which is an evaluation pass, not training, and `train()` now warns when the
+   start set is cycled fewer than twice. Both runs are reported, because the fix
+   turned out not to matter: at delta = 0.4 the one-pass and three-pass runs score
+   +0.97 and +0.92 improvement respectively. A real bug, and not the cause of the
+   failure --- which is worth separating rather than letting the fix take credit.
 
 **Objective-specific caveats.**
 
