@@ -54,6 +54,13 @@ LOGGER = logging.getLogger("droptimus")
 
 START_SET_CHOICES = ("single", "fixture", "zinc-sample", "zinc800-logp")
 
+#: Exploration rate used when sampling the evaluation distribution. The greedy
+#: policy is deterministic in a deterministic environment, so repeated greedy
+#: episodes from one start molecule return the same molecule every time; a small
+#: epsilon is what makes "100 generated molecules" a distribution rather than
+#: 100 copies. The deterministic greedy rollout is reported alongside it.
+EVAL_EPSILON = 0.1
+
 
 # --- argument parsing ------------------------------------------------------
 
@@ -127,7 +134,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     evaluate.add_argument("--start", default=None, help="start molecule for 'single'")
     evaluate.add_argument("--episodes", type=int, default=100)
-    evaluate.add_argument("--epsilon", type=float, default=0.0)
+    evaluate.add_argument(
+        "--epsilon",
+        type=float,
+        default=EVAL_EPSILON,
+        help=(
+            "exploration rate used to sample the reported distribution. The "
+            "greedy policy is deterministic, so from a single start molecule "
+            f"epsilon 0 yields the same molecule every episode; the default "
+            f"{EVAL_EPSILON} samples a real distribution. The deterministic "
+            "greedy rollout is always reported separately."
+        ),
+    )
     evaluate.add_argument("--device", default="auto")
     evaluate.add_argument("--seed", type=int, default=0)
     evaluate.add_argument("--data-dir", default=str(DEFAULT_DATA_DIR))
@@ -417,8 +435,24 @@ def command_evaluate(args: argparse.Namespace) -> int:
     print(f"evaluating {args.checkpoint}")
     print(
         f"objective {config.objective} | {len(starts)} episodes x "
-        f"{config.env.max_steps} steps | start set {args.start_set}"
+        f"{config.env.max_steps} steps | start set {args.start_set} | "
+        f"epsilon {args.epsilon}"
     )
+
+    # The deterministic greedy rollout, reported on its own because it is the
+    # single molecule the learned policy actually commits to.
+    greedy = collect_episodes(
+        config, [starts[0]], agent, epsilon=0.0, rng=random.Random(args.seed)
+    )[0]
+    print()
+    print(
+        f"greedy rollout (epsilon 0) from {greedy.start_smiles}\n"
+        f"  {greedy.best_smiles}\n"
+        f"  objective {greedy.best_objective:+.4f} "
+        f"(start {greedy.start_objective:+.4f}, "
+        f"improvement {greedy.improvement:+.4f})"
+    )
+
     agent_episodes = collect_episodes(
         config, starts, agent, epsilon=args.epsilon, rng=random.Random(args.seed)
     )
@@ -436,6 +470,13 @@ def command_evaluate(args: argparse.Namespace) -> int:
         "start_set": args.start_set,
         "episodes": len(starts),
         "max_steps": config.env.max_steps,
+        "epsilon": args.epsilon,
+        "greedy": {
+            "start_smiles": greedy.start_smiles,
+            "smiles": greedy.best_smiles,
+            "objective": greedy.best_objective,
+            "start_objective": greedy.start_objective,
+        },
         "agent": agent_metrics.as_dict(),
     }
 

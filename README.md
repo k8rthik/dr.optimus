@@ -113,4 +113,69 @@ error: Invalid SMILES 'C((((': RDKit could not parse the structure.
 
 ## Limitations
 
-<!-- LIMITATIONS -->
+**This is a benchmark reproduction, not a drug-discovery claim.** QED and
+penalized logP are cheap scalar proxies that the field uses because they are
+fast and public, not because they predict whether a molecule is a useful drug.
+Penalized logP in particular is famously gameable: its maximum over this action
+space is a long greasy carbon chain, which is exactly what an agent optimizing it
+produces. Nothing here was synthesized, assayed, or checked by a chemist. A high
+number in the table below means the agent found the optimum of a formula.
+
+**Where this falls short of the published work.** See the comparison table
+above for the measured gap. The main reasons, in order of how much they
+probably matter:
+
+1. **Training budget.** The paper trains for 5000 episodes per objective. These
+   runs are much shorter, to keep a single training run on a laptop inside about
+   45 minutes. The measured learning curves in `runs/*/history.json` were still
+   improving when the budget ran out, so these numbers are a lower bound on what
+   this code would reach, not its ceiling.
+2. **No bootstrapped-DQN ensemble.** The paper uses bootstrapped DQN (multiple
+   Q-heads, each trained on a resampled subset of experience) for exploration.
+   This implementation uses a single Q-head with epsilon-greedy exploration,
+   which explores less efficiently.
+3. **Subsampled bootstrap targets.** The Q-learning target maxes over the
+   successor molecules, and a drug-sized molecule has several hundred of them.
+   Scoring all of them for every transition in a batch dominates wall-clock
+   time, so `AgentConfig.bootstrap_actions` (default 48) subsamples the set. A
+   max over a subset is biased low, so the learned values are slightly
+   pessimistic.
+4. **No hyperparameter search.** Learning rate, network width, replay capacity
+   and target-sync interval are the paper's values or obvious defaults. Nothing
+   was tuned, because tuning on the test objective is how reproductions
+   accidentally become overfits.
+
+**Objective-specific caveats.**
+
+- The similarity constraint is enforced with a steep linear penalty
+  (`PENALTY_WEIGHT = 20.0` objective units per unit of similarity shortfall)
+  rather than a hard rejection, because a hard wall gives the agent no gradient
+  back over the boundary. The reported fraction of molecules that actually meet
+  the threshold is measured, so the softness cannot hide a failure --- but a
+  "constrained" result with a satisfied fraction below 1.0 is not a constrained
+  result for those molecules.
+- Novelty is measured against the first 50,000 ZINC250k molecules plus the start
+  molecules, not against all 249,456. A molecule counted as novel may still
+  appear in the part of ZINC the reference set did not cover.
+- Validity is 1.000 by construction, not by training: the environment only
+  proposes candidates that pass `Chem.SanitizeMol`. It appears in the table to
+  confirm the invariant holds, and it is not evidence about the model.
+
+**Reward shaping differs from the reference implementation by default.**
+`--reward-mode terminal` (the default here) pays the objective once, at the
+horizon. The reference implementation pays `objective * discount^(steps left)` at
+*every* step, which is available as `--reward-mode paper`. Returns are not
+comparable between modes; the measured comparison is in the table above.
+
+**Engineering limits worth knowing.**
+
+- Molecules are capped at `--max-atoms` (38 by default, the paper's cap).
+  Enumerating the action space is quadratic in atom count, so this cap is a
+  wall-clock budget as much as a chemical choice: a 36-atom molecule takes about
+  34 ms per step to enumerate on an M3 Pro, against 2 ms for a 13-atom one.
+- `--device auto` resolves to CPU, not MPS. This workload is many small forward
+  passes, where kernel-launch overhead dominates; MPS measured 1.51 s/episode
+  against 1.20 s/episode on CPU. `--device mps` is still available and would be
+  the right choice with a larger batch or network.
+- Only C, N and O can be added by default (`--atom-types`). Start molecules may
+  contain any element RDKit knows; the featurizer covers twelve.
