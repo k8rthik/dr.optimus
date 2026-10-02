@@ -11,8 +11,8 @@ import json
 import pytest
 
 from droptimus.cli import build_parser, main, run_config_from_args
-from droptimus.start_sets import parse_atom_types, resolve_start_set
 from droptimus.errors import DrOptimusError
+from droptimus.start_sets import parse_atom_types, resolve_start_set
 
 TINY_TRAIN = [
     "train",
