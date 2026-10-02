@@ -161,13 +161,52 @@ gradient to climb. Paying the per-step change in objective instead
 | final episode, max | -0.695 | **-0.424** | -3.405 | 11.51 |
 | final episode, mean | -4.705 | **-2.215** | -6.855 | n/a |
 
-The dense agent also visibly learns the right *idea*: its best molecule over
-training is hexane (`CCCCCC`, +2.472), i.e. it has worked out that the answer is
-a carbon chain and simply does not extend one far enough. It still does not beat
-the random baseline's single best molecule (+1.432 against +1.719), and it is
-nowhere near 11.51. So reward shaping explains a large part of the failure but not
-all of it, and the configuration probe having been run on QED only was a real
-methodological cost.
+Both halves of that need saying. Terminal-only reward was a **real** cause of the
+failure --- dense reward improves every number, with 1200 episodes against 2000 ---
+and the dense agent visibly learns the right idea: its best molecule over training
+is hexane (`CCCCCC`, +2.472), so it has worked out that the answer is a carbon
+chain and simply does not extend one far enough. But it is **still not good**: the
+random-edit baseline's single best molecule (+1.719) beats the dense agent's
+(+1.432), and the published MolDQN-naive figure is 11.51. Reward shaping explains
+a large part of this failure and not all of it, and having run the configuration
+probe on QED only was a real methodological cost.
+
+**4. On the similarity-constrained task the trained policy is worse than random
+editing.** ZINC800-logP, delta = 0.4, 2400 training episodes (three passes over
+the 800 start molecules), scored on the best molecule each episode found:
+
+| delta = 0.4 | penalized logP improvement | improved | constraint satisfied |
+| --- | --- | --- | --- |
+| this run, trained agent | +0.74 +/- 2.27 | 27.8% | 95.5% |
+| this run, random-edit baseline | **+1.05 +/- 2.72** | **36.4%** | 94.4% |
+| MolDQN-naive | +3.13 +/- 1.57 | --- | 100% |
+| MolDQN-bootstrap | +3.37 +/- 1.62 | --- | 100% |
+
+The random walk improves more molecules, by more, at the same constraint
+satisfaction. There is no reading of this on which the learned policy is doing
+useful work. An earlier single-pass run (800 episodes over 800 molecules, each
+seen exactly once --- see the limitations) was worse still at -0.76 +/- 3.99.
+
+Two details matter for reading that table:
+
+- **Scoring the best molecule visited is not a generous choice here, it is the
+  only sensible one.** After a full 20-step budget of forced edits, similarity to
+  the start molecule has collapsed to about 0.15 and essentially nothing satisfies
+  delta = 0.4 --- the agent's terminal states satisfy it 1.9% of the time, the
+  baseline's 0.0%. The terminal state measures the step budget, not the policy.
+- **The greedy (epsilon 0) policy makes no edit at all.** Its start, best and
+  final molecules are the same string and the objective is unchanged at -62.52.
+  Faced with a penalty of 100 per unit of similarity shortfall, it has learned
+  that the safest action is to do nothing, forever. That is a degenerate policy
+  and naming it as a failure mode is the honest report; quoting its score as a
+  result would not be.
+
+So the two failure modes are opposite, which is informative. Under a terminal
+reward on QED the agent will not stop --- it finds a good molecule and keeps
+editing, which is what the gap between the best-visited and final-episode columns
+measures. Under a large constraint penalty it will not start. Neither run learned
+to use the "no modification" action as a *choice*; one ignores it and the other
+hides behind it.
 
 ### Two protocols, and the gap between them is itself a measurement
 
@@ -198,6 +237,74 @@ separation found" rather than as a ranking. The default stays `terminal` because
 it is the unambiguous episodic formulation, not because it won.
 
 <!-- RESULTS:START -->
+
+### Objective values
+
+`greedy` is the single molecule the deterministic policy produces. `best of 100` and `mean` come from 100 epsilon-greedy episodes (epsilon 0.1), because a deterministic policy from one start molecule returns the same molecule every time. The random-edit baseline takes the same number of episodes from the same start molecules, choosing uniformly among valid edits.
+
+| run | objective | episodes | greedy | best of 100 | mean +/- sd | random baseline best | random baseline mean | MolDQN-naive best | MolDQN-bootstrap best |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| constrained-logp | constrained | 800 | -62.517 | 0.050 | -8.379 +/- 4.798 | -1.614 | -8.142 +/- 4.275 | n/a | n/a |
+| constrained-logp-3pass | constrained | 2400 | -62.517 | 1.736 | -8.447 +/- 4.574 | -1.614 | -8.142 +/- 4.275 | n/a | n/a |
+| logp-fp-2000 | penalized_logp | 2000 | -1.772 | -0.430 | -1.752 +/- 0.301 | 1.719 | -1.010 +/- 0.971 | 11.510 | 11.840 |
+| logp-fp-dense-1200 | penalized_logp | 1200 | -0.335 | 1.432 | -0.237 +/- 0.706 | 1.719 | -1.010 +/- 0.971 | 11.510 | 11.840 |
+| qed-fp-2000 | qed | 2000 | 0.455 | 0.815 | 0.563 +/- 0.106 | 0.675 | 0.493 +/- 0.073 | 0.934 | 0.948 |
+| qed-fp-500 | qed | 500 | 0.530 | 0.802 | 0.537 +/- 0.079 | 0.675 | 0.493 +/- 0.073 | 0.934 | 0.948 |
+| qed-gnn-500 | qed | 500 | 0.811 | 0.839 | 0.636 +/- 0.128 | 0.675 | 0.493 +/- 0.073 | 0.934 | 0.948 |
+
+### Final-episode molecules (the paper's protocol)
+
+Zhou et al. Table 1 reports the top three scores among the last 100 *terminal* states, so this is the table to compare against the published column. MolDQN-naive is a single Q-network with epsilon-greedy exploration, which is what this code implements; MolDQN-bootstrap adds an ensemble of Q-heads, which it does not.
+
+| run | objective | best of n (final) | mean +/- sd (final) | baseline best (final) | MolDQN-naive best | MolDQN-bootstrap best |
+| --- | --- | --- | --- | --- | --- | --- |
+| constrained-logp | constrained | -6.485 | -36.592 +/- 7.916 | -10.239 | n/a | n/a |
+| constrained-logp-3pass | constrained | 1.736 | -34.253 +/- 8.392 | -10.239 | n/a | n/a |
+| logp-fp-2000 | penalized_logp | -0.695 | -4.705 +/- 1.560 | -3.405 | 11.510 | 11.840 |
+| logp-fp-dense-1200 | penalized_logp | -0.424 | -2.215 +/- 1.263 | -3.405 | 11.510 | 11.840 |
+| qed-fp-2000 | qed | 0.815 | 0.502 +/- 0.118 | 0.606 | 0.934 | 0.948 |
+| qed-fp-500 | qed | 0.757 | 0.437 +/- 0.141 | 0.606 | 0.934 | 0.948 |
+| qed-gnn-500 | qed | 0.822 | 0.588 +/- 0.164 | 0.606 | 0.934 | 0.948 |
+
+### Generation quality
+
+| run | n | validity | uniqueness | novelty | mean similarity to start | mean improvement | improved | meets similarity threshold |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| constrained-logp | 800 | 1.000 | 1.000 | 0.338 | 0.835 | +0.809 +/- 1.961 | 34% | 0.960 |
+| constrained-logp-3pass | 800 | 1.000 | 1.000 | 0.278 | 0.859 | +0.741 +/- 2.271 | 28% | 0.955 |
+| logp-fp-2000 | 100 | 1.000 | 0.150 | 1.000 | 0.001 | +4.478 +/- 0.301 | 100% | n/a |
+| logp-fp-dense-1200 | 100 | 1.000 | 0.200 | 1.000 | 0.000 | +5.993 +/- 0.706 | 100% | n/a |
+| qed-fp-2000 | 100 | 1.000 | 0.710 | 1.000 | 0.000 | +0.203 +/- 0.106 | 100% | n/a |
+| qed-fp-500 | 100 | 1.000 | 0.700 | 1.000 | 0.000 | +0.178 +/- 0.079 | 100% | n/a |
+| qed-gnn-500 | 100 | 1.000 | 0.910 | 1.000 | 0.000 | +0.276 +/- 0.128 | 100% | n/a |
+
+Validity is 1.000 by construction, not by training: the environment only proposes candidates that pass RDKit sanitization. The column confirms the invariant holds.
+
+### Throughput
+
+| run | episodes | steps/s | s/episode | wall-clock (min) |
+| --- | --- | --- | --- | --- |
+| constrained-logp | 800 | 18.0 | 1.11 | 14.8 |
+| constrained-logp-3pass | 2400 | 23.0 | 0.87 | 34.8 |
+| logp-fp-2000 | 2000 | 28.4 | 1.41 | 47.0 |
+| logp-fp-dense-1200 | 1200 | 34.4 | 1.16 | 23.3 |
+| qed-fp-2000 | 2000 | 28.2 | 1.42 | 47.2 |
+| qed-fp-500 | 500 | 30.6 | 1.31 | 10.9 |
+| qed-gnn-500 | 500 | 12.8 | 3.12 | 26.0 |
+
+### Configuration probes
+
+| configuration | episodes | greedy | best of n | mean +/- sd |
+| --- | --- | --- | --- | --- |
+| ablate-qed-dense | 250 | 0.458 | 0.705 | 0.479 +/- 0.071 |
+| ablate-qed-paper | 250 | 0.483 | 0.737 | 0.516 +/- 0.076 |
+| ablate-qed-terminal | 250 | 0.417 | 0.732 | 0.525 +/- 0.083 |
+| probe-g0.9-lr1e-4 | 600 | 0.614 | 0.727 | 0.519 +/- 0.105 |
+| probe-g1.0-lr1e-4 | 600 | 0.432 | 0.715 | 0.518 +/- 0.079 |
+| probe-g1.0-lr5e-4 | 600 | 0.385 | 0.653 | 0.481 +/- 0.080 |
+| probe-lr5e-4 | 600 | 0.557 | 0.763 | 0.541 +/- 0.099 |
+| random-edit baseline | n/a | n/a | 0.788 | 0.493 +/- 0.079 |
+
 <!-- RESULTS:END -->
 
 ---
@@ -254,6 +361,13 @@ probably matter:
    x -6, and the logP agent does not learn. This is a settings failure inherited
    from an objective it was not probed on, not evidence that the implementation
    cannot optimize penalized logP.
+
+6. **The first constrained run trained for one pass over its start set.** 800
+   episodes over 800 start molecules assigns each molecule exactly one episode,
+   which is an evaluation pass, not training. `train()` now warns when the start
+   set is cycled fewer than twice. The three-pass run (2400 episodes) is the one
+   reported above; the one-pass run is kept in the tables as the worse result it
+   produced.
 
 **Objective-specific caveats.**
 

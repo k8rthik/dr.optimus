@@ -478,19 +478,49 @@ def command_evaluate(args: argparse.Namespace) -> int:
         # the constraint success rate alongside it, so the penalty is taken back
         # out before the improvement is reported.
         base_name = str(dict(config.objective_kwargs).get("base", "penalized_logp"))
-        base_records = rescore(
-            generated_from_episodes(agent_episodes, use_best=False),
-            make_objective(base_name),
+        base_objective = make_objective(base_name)
+
+        # Best-visited, not final. After a full 20-step budget of forced edits a
+        # molecule has almost always fallen below delta, so the terminal state is
+        # the wrong molecule to score for a *constrained* task: it measures the
+        # step budget, not the policy. The reportable result is the best molecule
+        # the episode found, which is also what makes the success rate meaningful.
+        base_best = compute_metrics(
+            rescore(generated_from_episodes(agent_episodes, use_best=True), base_objective),
+            reference=reference,
+            similarity_delta=delta,
         )
-        base_metrics = compute_metrics(
-            base_records, reference=reference, similarity_delta=delta
+        base_final = compute_metrics(
+            rescore(generated_from_episodes(agent_episodes, use_best=False), base_objective),
+            reference=reference,
+            similarity_delta=delta,
         )
         print()
-        print(format_metrics(base_metrics, f"same molecules scored by {base_name}"))
+        print(format_metrics(base_best, f"best visited, scored by {base_name}"))
         print()
-        print(constrained_comparison(float(delta), base_metrics))
-        payload["agent_base_objective"] = base_metrics.as_dict()
+        print(format_metrics(base_final, f"final episode, scored by {base_name}"))
+        print()
+        print(constrained_comparison(float(delta), base_best))
+        payload["agent_base_objective"] = base_best.as_dict()
+        payload["agent_base_objective_final"] = base_final.as_dict()
         payload["base_objective"] = base_name
+
+        if not args.no_baseline:
+            baseline_base = compute_metrics(
+                rescore(
+                    generated_from_episodes(baseline_episodes, use_best=True),
+                    base_objective,
+                ),
+                reference=reference,
+                similarity_delta=delta,
+            )
+            print()
+            print(
+                format_metrics(
+                    baseline_base, f"random-edit baseline, best visited, {base_name}"
+                )
+            )
+            payload["random_baseline_base_objective"] = baseline_base.as_dict()
 
     if args.out:
         destination = Path(args.out)
