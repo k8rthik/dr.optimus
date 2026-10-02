@@ -95,13 +95,14 @@ class EnvConfig:
     #: no cap (faithful to the paper). An integer uniformly subsamples the
     #: valid-action set, which trades fidelity for wall-clock time.
     max_actions: int | None = None
-    #: The paper uses 0.9. With ``reward_mode="terminal"`` and a 40-step horizon
-    #: that makes the value of an early state 0.9**39 ~ 0.015 times the final
-    #: objective, which is a badly conditioned regression target; gamma = 1 makes
-    #: Q(m, h) predict the achievable final objective directly. Measured over 600
-    #: QED episodes, gamma 1.0 reached mean 0.598 / best 0.833 against 0.541 /
-    #: 0.763 for gamma 0.9. Pass ``--discount 0.9`` for the paper's value.
-    discount: float = 1.0
+    #: The paper's value. Undiscounted returns look better motivated for a
+    #: fixed-horizon terminal reward -- gamma 0.9 over 40 steps makes an early
+    #: state's value 0.9**39 ~ 0.015 times the final objective -- but measured
+    #: over 600 QED episodes, gamma 1.0 was *worse* on every metric: mean 0.481
+    #: / best 0.653 against 0.541 / 0.763 at gamma 0.9. The conditioning
+    #: argument did not survive contact with the measurement, so the paper's
+    #: value stands.
+    discount: float = 0.9
     #: ``terminal`` pays the objective once, at the end of the episode.
     #: ``dense`` pays the per-step change in objective value.
     #: ``paper`` reproduces the reference implementation: every step pays
@@ -118,8 +119,8 @@ class AgentConfig:
     gnn_hidden: int = 64
     gnn_layers: int = 3
     #: The paper uses 1e-4. At the episode budget that fits a laptop, 5e-4
-    #: converges enough faster to matter: measured over 600 QED episodes, mean
-    #: 0.598 / best 0.833 against 0.506 / 0.816 at 1e-4.
+    #: converges fast enough to matter -- see the configuration-probe table in
+    #: the README for the measured comparison at 600 QED episodes.
     learning_rate: float = 5e-4
     grad_clip: float = 10.0
     batch_size: int = 32
