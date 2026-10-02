@@ -27,7 +27,7 @@ from functools import lru_cache
 from rdkit import Chem
 
 from droptimus.chem.molecule import mol_to_smiles, parse_smiles
-from droptimus.config import BOND_ORDERS, EnvConfig
+from droptimus.config import BOND_ORDERS, MAX_CANONICAL_ROUND_TRIPS, EnvConfig
 
 #: Index i of this tuple is the RDKit bond type of order i (index 0 = no bond).
 _BOND_TYPES: tuple[Chem.BondType | None, ...] = (
@@ -67,10 +67,32 @@ def free_valence_map(mol: Chem.Mol) -> dict[int, tuple[int, ...]]:
 
 
 def _sanitized_smiles(mol: Chem.RWMol) -> str | None:
-    """Return the canonical SMILES of ``mol``, or None if it does not sanitize."""
+    """Return a round-trip-stable canonical SMILES for ``mol``, or None.
+
+    Dropping candidates that do not sanitize is what keeps the action space
+    chemically valid. The round trip on top of that keeps it *addressable*: the
+    environment identifies an action by its canonical SMILES, so a candidate
+    whose SMILES canonicalizes to a different string would be offered to the
+    agent under a name the environment then refuses to accept.
+
+    This is not hypothetical. Built from a kekulized template, the molecule
+    ``NC12c3o[nH][nH]n1c32`` sanitizes cleanly but reads back as
+    ``NC12C3=C1N2NNO3`` --- RDKit's aromaticity perception is not a fixed point
+    of one write/read cycle for that fused ring system. Candidates that have not
+    settled within ``MAX_CANONICAL_ROUND_TRIPS`` cycles are dropped.
+    """
     if Chem.SanitizeMol(mol, catchErrors=True):
         return None
-    return mol_to_smiles(mol)
+    smiles = mol_to_smiles(mol)
+    for _ in range(MAX_CANONICAL_ROUND_TRIPS):
+        reparsed = Chem.MolFromSmiles(smiles)
+        if reparsed is None:
+            return None
+        settled = Chem.MolToSmiles(reparsed)
+        if settled == smiles:
+            return smiles
+        smiles = settled
+    return None
 
 
 def atom_additions(mol: Chem.Mol, config: EnvConfig) -> frozenset[str]:

@@ -35,6 +35,14 @@ MORGAN_BITS: int = 2048
 #: Hard cap on atoms a featurized molecule may have (padding width for the GNN).
 FEATURIZER_MAX_ATOMS: int = 60
 
+#: How many write/read cycles a candidate molecule gets to settle on a stable
+#: canonical SMILES. RDKit's aromaticity perception is not always a fixed point
+#: of a single cycle: a molecule built from a kekulized template can be written
+#: with aromatic flags that kekulize differently when the string is read back.
+#: Actions are identified by their canonical SMILES, so an unstable string would
+#: make an action the environment offered unrecognizable when it came back.
+MAX_CANONICAL_ROUND_TRIPS: int = 3
+
 # --- Objective constants ---------------------------------------------------
 
 #: Normalization constants for penalized logP, from Kusner et al. (2017) /
