@@ -111,6 +111,7 @@ def train(
         raise ConfigError(f"episodes must be >= 1, got {config.train.episodes}.")
 
     starts = tuple(start_molecules) if start_molecules else (config.start_smiles,)
+    _warn_if_undertrained(len(starts), config.train.episodes)
     rng = random.Random(config.train.seed)
     learner = agent or DoubleDQNAgent(
         agent_config=config.agent,
@@ -172,6 +173,29 @@ def train(
         best_smiles=best_smiles,
         best_objective=best_objective,
         wall_seconds=wall_seconds,
+    )
+
+
+def _warn_if_undertrained(n_starts: int, episodes: int) -> None:
+    """Warn when the start set is cycled fewer than twice.
+
+    Episodes are assigned to start molecules round-robin, so training for as many
+    episodes as there are start molecules shows each one exactly once. That is an
+    evaluation pass wearing a training loop's clothes, and it is an easy mistake
+    to make with an 800-molecule start set.
+    """
+    if n_starts < 2 or episodes >= 2 * n_starts:
+        return
+    passes = episodes / n_starts
+    LOGGER.warning(
+        "%d episodes over %d start molecules is only %.2f passes through the "
+        "start set: each molecule is seen about %.1f time(s), so the agent has "
+        "little opportunity to learn. Raise --episodes to a multiple of the "
+        "start-set size.",
+        episodes,
+        n_starts,
+        passes,
+        passes,
     )
 
 
