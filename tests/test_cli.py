@@ -10,13 +10,8 @@ import json
 
 import pytest
 
-from droptimus.cli import (
-    _parse_atom_types,
-    build_parser,
-    main,
-    resolve_start_set,
-    run_config_from_args,
-)
+from droptimus.cli import build_parser, main, run_config_from_args
+from droptimus.start_sets import parse_atom_types, resolve_start_set
 from droptimus.errors import DrOptimusError
 
 TINY_TRAIN = [
@@ -65,15 +60,15 @@ class TestParser:
 
 class TestAtomTypeParsing:
     def test_parses_a_list(self) -> None:
-        assert _parse_atom_types("C, N ,O") == ("C", "N", "O")
+        assert parse_atom_types("C, N ,O") == ("C", "N", "O")
 
     def test_empty_raises(self) -> None:
         with pytest.raises(DrOptimusError):
-            _parse_atom_types("  ,  ")
+            parse_atom_types("  ,  ")
 
     def test_unknown_element_raises(self) -> None:
         with pytest.raises(DrOptimusError):
-            _parse_atom_types("C,Xx")
+            parse_atom_types("C,Xx")
 
 
 class TestRunConfigFromArgs:

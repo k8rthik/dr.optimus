@@ -191,3 +191,30 @@ class TestSamplePathIsInsideThePackage:
         from droptimus.datasets import SAMPLE_PATH
 
         assert SAMPLE_PATH.exists()
+
+
+class TestNoveltyReference:
+    """Falling back to a 200-molecule reference must be loud, not silent."""
+
+    def test_zero_size_means_no_reference(self) -> None:
+        from droptimus.start_sets import novelty_reference
+
+        assert novelty_reference(0) == ()
+
+    def test_uses_zinc_when_present(self, tmp_path) -> None:
+        from droptimus.start_sets import novelty_reference
+
+        (tmp_path / "zinc250k.csv").write_text("smiles\nCCO\nc1ccccc1\nCCN\n")
+        assert novelty_reference(2, tmp_path) == ("CCO", "c1ccccc1")
+
+    def test_falls_back_to_the_package_sample_with_a_warning(
+        self, tmp_path, caplog
+    ) -> None:
+        import logging
+
+        from droptimus.start_sets import novelty_reference
+
+        with caplog.at_level(logging.WARNING, logger="droptimus.start_sets"):
+            reference = novelty_reference(100, tmp_path)
+        assert len(reference) == 200
+        assert "overstate novelty" in caplog.text

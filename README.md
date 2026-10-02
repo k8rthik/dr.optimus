@@ -134,7 +134,22 @@ The random-edit baseline is a strong opponent here, and that is worth
 understanding rather than hiding: QED has a broad optimum, so 40 random
 valence-valid edits from a carbon atom often land on a mid-0.5 QED molecule, and
 the best of 100 such tries is around 0.79. Beating that reliably is the whole
-difficulty of the benchmark.
+difficulty of the benchmark. The paper's own random-action baseline reached QED
+0.640 under its stricter terminal-state protocol, so a strong random baseline is
+expected rather than a sign that something is wrong here.
+
+**Two protocols, and the gap between them is itself a measurement.** Much of
+this literature reports the best molecule *visited* during an episode. Zhou et
+al. Table 1 does something stricter: it scores the last 100 *terminal* states,
+the molecule each episode actually ended on. Both are reported below, and the
+published comparison uses the terminal-state numbers.
+
+The two differ a lot here, and that gap is diagnostic rather than cosmetic. The
+environment always offers a "no modification" action, so under a terminal reward
+the optimal policy is to reach a good molecule and then sit on it --- a converged
+agent would have no gap at all. The size of ours is a direct measure of how far
+from converged these runs are: the agent finds good molecules and then wanders
+off them.
 
 <!-- RESULTS:START -->
 <!-- RESULTS:END -->
