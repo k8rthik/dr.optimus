@@ -67,8 +67,8 @@ Requires Python 3.12 and [uv](https://docs.astral.sh/uv/).
 ```bash
 uv venv --python 3.12
 uv pip install -e ".[dev]"
-.venv/bin/python -m pytest                              # 413 tests, ~15 s
-.venv/bin/python -m pytest --cov --cov-report=term      # 95% statement coverage
+.venv/bin/python -m pytest                              # 428 tests, ~5 s
+.venv/bin/python -m pytest --cov --cov-report=term      # 94% statement coverage
 ```
 
 Fetch the benchmark set (ZINC250k, 22 MB, gitignored):
