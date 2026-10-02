@@ -16,7 +16,7 @@ actually satisfy the constraint, so the softness never hides a failure.
 
 from __future__ import annotations
 
-from typing import Mapping
+from collections.abc import Mapping
 
 from droptimus.chem.molecule import canonical_smiles, tanimoto_similarity
 from droptimus.config import DEFAULT_SIMILARITY_DELTA

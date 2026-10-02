@@ -7,7 +7,7 @@ are stateless after construction and therefore safe to share and to cache.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Mapping
+from collections.abc import Mapping
 
 
 class Objective(ABC):

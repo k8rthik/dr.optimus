@@ -32,7 +32,7 @@ class TestFixture:
         from droptimus.chem.molecule import atom_count
 
         sizes = [atom_count(s) for s in load_fixture()]
-        assert 10 <= min(sizes) and max(sizes) <= 60
+        assert min(sizes) >= 10 and max(sizes) <= 60
 
 
 class TestReadWrite:

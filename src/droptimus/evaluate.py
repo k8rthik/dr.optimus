@@ -9,8 +9,8 @@ rather than presented as a result.
 from __future__ import annotations
 
 import statistics
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
-from typing import Mapping, Sequence
 
 from droptimus.chem.molecule import canonical_smiles, is_valid_smiles, tanimoto_similarity
 from droptimus.rollout import Episode
@@ -186,7 +186,7 @@ def format_metrics(metrics: Metrics, title: str = "measured results") -> str:
         f"  objective      mean {metrics.objective_mean:+.3f}  "
         f"sd {metrics.objective_std:.3f}  median {metrics.objective_median:+.3f}  "
         f"max {metrics.objective_max:+.3f}",
-        f"  top 3          " + ", ".join(f"{value:+.3f}" for value in metrics.top3),
+        "  top 3          " + ", ".join(f"{value:+.3f}" for value in metrics.top3),
         f"  start mean     {metrics.start_objective_mean:+.3f}",
         f"  improvement    mean {metrics.improvement_mean:+.3f} "
         f"+/- {metrics.improvement_std:.3f}  "

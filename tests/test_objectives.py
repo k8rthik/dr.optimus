@@ -87,8 +87,8 @@ class TestPenalizedLogp:
         assert penalized_logp("C" * 20) == pytest.approx(6.4546, abs=1e-3)
 
     def test_ring_excess_term_only_fires_above_six(self) -> None:
-        from droptimus.objectives.logp import largest_ring_excess
         from droptimus.chem.molecule import parse_smiles
+        from droptimus.objectives.logp import largest_ring_excess
 
         assert largest_ring_excess(parse_smiles("C1CCCCC1")) == 0
         assert largest_ring_excess(parse_smiles("C1CCCCCCC1")) == 2

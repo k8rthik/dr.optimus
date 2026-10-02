@@ -17,9 +17,8 @@ import json
 import logging
 import random
 import sys
-from dataclasses import replace
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 from droptimus import __version__
 from droptimus.agent.dqn import DoubleDQNAgent
@@ -38,17 +37,16 @@ from droptimus.datasets import (
     load_fixture,
     load_zinc_smiles,
     lowest_scoring,
-    read_smiles,
     sample_molecules,
 )
 from droptimus.errors import DrOptimusError
 from droptimus.evaluate import (
-    compute_metrics,
     comparison_rows,
+    compute_metrics,
     format_metrics,
     generated_from_episodes,
 )
-from droptimus.objectives import available_objectives, objective_needs_reference
+from droptimus.objectives import available_objectives
 from droptimus.objectives.logp import penalized_logp
 from droptimus.train import collect_episodes, train
 

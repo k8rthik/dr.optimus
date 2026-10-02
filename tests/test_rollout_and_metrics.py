@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import random
 from dataclasses import replace
 
@@ -223,7 +224,7 @@ class TestEpsilonSchedule:
     def test_is_monotone(self) -> None:
         config = small_run(episodes=50)
         values = [epsilon_at(i, config) for i in range(50)]
-        assert all(b <= a + 1e-12 for a, b in zip(values, values[1:]))
+        assert all(b <= a + 1e-12 for a, b in itertools.pairwise(values))
 
     def test_bad_decay_fraction_raises(self) -> None:
         with pytest.raises(ConfigError):

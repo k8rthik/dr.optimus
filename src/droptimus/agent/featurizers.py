@@ -8,7 +8,7 @@ tensors keyed by the argument names its network expects.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Mapping, Sequence
+from collections.abc import Mapping, Sequence
 
 import numpy as np
 import torch

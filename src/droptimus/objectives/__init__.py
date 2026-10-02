@@ -5,17 +5,16 @@ Importing this package registers every built-in objective.
 
 from __future__ import annotations
 
+# Imported for their registration side effects.
+from droptimus.objectives import logp as _logp
+from droptimus.objectives import qed as _qed
+from droptimus.objectives import similarity as _similarity
 from droptimus.objectives.base import Objective
 from droptimus.objectives.registry import (
     available_objectives,
     make_objective,
     register_objective,
 )
-
-# Imported for their registration side effects.
-from droptimus.objectives import logp as _logp  # noqa: E402,F401
-from droptimus.objectives import qed as _qed  # noqa: E402,F401
-from droptimus.objectives import similarity as _similarity  # noqa: E402,F401
 
 #: Objectives that need a reference molecule (the start molecule) to be built.
 REFERENCE_REQUIRING = ("similarity", "constrained")
@@ -27,10 +26,10 @@ def objective_needs_reference(name: str) -> bool:
 
 
 __all__ = [
+    "REFERENCE_REQUIRING",
     "Objective",
     "available_objectives",
     "make_objective",
-    "register_objective",
     "objective_needs_reference",
-    "REFERENCE_REQUIRING",
+    "register_objective",
 ]

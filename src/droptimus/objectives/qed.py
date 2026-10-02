@@ -6,8 +6,8 @@ of 0.948 for this objective.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from functools import lru_cache
-from typing import Mapping
 
 from rdkit.Chem import QED
 

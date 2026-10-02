@@ -132,14 +132,14 @@ class RunConfig:
     train: TrainConfig = field(default_factory=TrainConfig)
     objective_kwargs: tuple[tuple[str, float], ...] = ()
 
-    def with_env(self, **kwargs: object) -> "RunConfig":
+    def with_env(self, **kwargs: object) -> RunConfig:
         """Return a copy with environment fields overridden."""
         return replace(self, env=replace(self.env, **kwargs))
 
-    def with_agent(self, **kwargs: object) -> "RunConfig":
+    def with_agent(self, **kwargs: object) -> RunConfig:
         """Return a copy with agent fields overridden."""
         return replace(self, agent=replace(self.agent, **kwargs))
 
-    def with_train(self, **kwargs: object) -> "RunConfig":
+    def with_train(self, **kwargs: object) -> RunConfig:
         """Return a copy with training fields overridden."""
         return replace(self, train=replace(self.train, **kwargs))

@@ -11,8 +11,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from rdkit import Chem, RDLogger
-from rdkit.Chem import DataStructs
-from rdkit.Chem import rdFingerprintGenerator
+from rdkit.Chem import DataStructs, rdFingerprintGenerator
 
 from droptimus.config import MORGAN_BITS, MORGAN_RADIUS
 from droptimus.errors import InvalidSmilesError
