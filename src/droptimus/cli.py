@@ -29,6 +29,7 @@ from droptimus.config import (
     EnvConfig,
     RunConfig,
     TrainConfig,
+    field_default,
 )
 from droptimus.datasets import (
     DEFAULT_DATA_DIR,
@@ -194,7 +195,12 @@ def _add_run_arguments(parser: argparse.ArgumentParser) -> None:
         default="C,N,O",
         help="comma-separated elements the agent may add",
     )
-    parser.add_argument("--discount", type=float, default=0.9)
+    parser.add_argument(
+        "--discount",
+        type=float,
+        default=field_default(EnvConfig, "discount"),
+        help="reward discount; pass 0.9 for the paper's value",
+    )
     parser.add_argument(
         "--reward-mode",
         choices=("terminal", "dense", "paper"),
@@ -211,9 +217,19 @@ def _add_run_arguments(parser: argparse.ArgumentParser) -> None:
         default=None,
         help="cap on candidates scored per step (default: no cap)",
     )
-    parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--bootstrap-actions", type=int, default=48)
-    parser.add_argument("--learning-rate", type=float, default=1e-4)
+    parser.add_argument(
+        "--batch-size", type=int, default=field_default(AgentConfig, "batch_size")
+    )
+    parser.add_argument(
+        "--bootstrap-actions",
+        type=int,
+        default=field_default(AgentConfig, "bootstrap_actions"),
+    )
+    parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=field_default(AgentConfig, "learning_rate"),
+    )
     parser.add_argument("--target-sync-steps", type=int, default=500)
     parser.add_argument("--replay-capacity", type=int, default=20_000)
     parser.add_argument("--device", default="auto")

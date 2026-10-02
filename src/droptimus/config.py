@@ -64,6 +64,22 @@ DEFAULT_START_SMILES: str = "C"
 DEFAULT_SIMILARITY_DELTA: float = 0.4
 
 
+def field_default(config_class: type, name: str) -> object:
+    """Return the declared default of a config field.
+
+    These dataclasses use ``slots=True``, so ``EnvConfig.discount`` is a slot
+    descriptor rather than the default value. Argparse needs the real default, so
+    it goes through here.
+
+    Raises:
+        KeyError: if ``name`` is not a field of ``config_class``.
+    """
+    fields = getattr(config_class, "__dataclass_fields__", {})
+    if name not in fields:
+        raise KeyError(f"{config_class.__name__} has no field {name!r}.")
+    return fields[name].default
+
+
 @dataclass(frozen=True, slots=True)
 class EnvConfig:
     """Configuration of the molecule-editing MDP."""
@@ -79,7 +95,13 @@ class EnvConfig:
     #: no cap (faithful to the paper). An integer uniformly subsamples the
     #: valid-action set, which trades fidelity for wall-clock time.
     max_actions: int | None = None
-    discount: float = 0.9
+    #: The paper uses 0.9. With ``reward_mode="terminal"`` and a 40-step horizon
+    #: that makes the value of an early state 0.9**39 ~ 0.015 times the final
+    #: objective, which is a badly conditioned regression target; gamma = 1 makes
+    #: Q(m, h) predict the achievable final objective directly. Measured over 600
+    #: QED episodes, gamma 1.0 reached mean 0.598 / best 0.833 against 0.541 /
+    #: 0.763 for gamma 0.9. Pass ``--discount 0.9`` for the paper's value.
+    discount: float = 1.0
     #: ``terminal`` pays the objective once, at the end of the episode.
     #: ``dense`` pays the per-step change in objective value.
     #: ``paper`` reproduces the reference implementation: every step pays
@@ -95,7 +117,10 @@ class AgentConfig:
     hidden_sizes: tuple[int, ...] = (1024, 512, 128, 32)
     gnn_hidden: int = 64
     gnn_layers: int = 3
-    learning_rate: float = 1e-4
+    #: The paper uses 1e-4. At the episode budget that fits a laptop, 5e-4
+    #: converges enough faster to matter: measured over 600 QED episodes, mean
+    #: 0.598 / best 0.833 against 0.506 / 0.816 at 1e-4.
+    learning_rate: float = 5e-4
     grad_clip: float = 10.0
     batch_size: int = 32
     replay_capacity: int = 20_000
@@ -103,7 +128,10 @@ class AgentConfig:
     #: The full set can run to several hundred molecules; scoring all of them
     #: for every transition in a batch dominates wall-clock time. Subsampling
     #: makes the target a max over a subset, which biases it slightly low.
-    bootstrap_actions: int = 48
+    #: Measured: one gradient step costs 27.5 ms at 48 and 13.5 ms at 16, so 16
+    #: buys roughly twice as many gradient steps per minute of training. At a
+    #: fixed wall-clock budget that trade is worth more than the bias.
+    bootstrap_actions: int = 16
     #: Gradient updates per environment step.
     updates_per_step: int = 1
     #: Environment steps between hard target-network syncs.

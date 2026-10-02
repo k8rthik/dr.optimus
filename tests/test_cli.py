@@ -304,3 +304,62 @@ class TestEvaluationSampling:
         )
         assert code == 0
         assert "greedy rollout (epsilon 0)" in capsys.readouterr().out
+
+
+class TestConfigDefaultsReachArgparse:
+    """slots=True makes class attributes slot descriptors, not defaults.
+
+    Reading EnvConfig.discount directly yields a descriptor object, which would
+    silently become the argparse default. field_default() is the supported path.
+    """
+
+    def test_field_default_returns_values_not_descriptors(self) -> None:
+        from droptimus.config import AgentConfig, EnvConfig, field_default
+
+        assert field_default(EnvConfig, "discount") == pytest.approx(
+            EnvConfig().discount
+        )
+        assert field_default(AgentConfig, "learning_rate") == pytest.approx(
+            AgentConfig().learning_rate
+        )
+        assert isinstance(field_default(AgentConfig, "bootstrap_actions"), int)
+
+    def test_unknown_field_raises(self) -> None:
+        from droptimus.config import EnvConfig, field_default
+
+        with pytest.raises(KeyError):
+            field_default(EnvConfig, "not_a_field")
+
+    @pytest.mark.parametrize(
+        ("flag", "config_attr"),
+        [
+            ("discount", "discount"),
+            ("max_steps", "max_steps"),
+            ("max_atoms", "max_atoms"),
+        ],
+    )
+    def test_env_defaults_match_the_config_module(
+        self, flag: str, config_attr: str
+    ) -> None:
+        from droptimus.config import EnvConfig
+
+        args = build_parser().parse_args(["train"])
+        assert getattr(args, flag) == pytest.approx(getattr(EnvConfig(), config_attr))
+
+    @pytest.mark.parametrize(
+        ("flag", "config_attr"),
+        [
+            ("learning_rate", "learning_rate"),
+            ("batch_size", "batch_size"),
+            ("bootstrap_actions", "bootstrap_actions"),
+            ("replay_capacity", "replay_capacity"),
+            ("target_sync_steps", "target_sync_steps"),
+        ],
+    )
+    def test_agent_defaults_match_the_config_module(
+        self, flag: str, config_attr: str
+    ) -> None:
+        from droptimus.config import AgentConfig
+
+        args = build_parser().parse_args(["train"])
+        assert getattr(args, flag) == pytest.approx(getattr(AgentConfig(), config_attr))
